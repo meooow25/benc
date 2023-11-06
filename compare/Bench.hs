@@ -353,3 +353,61 @@ instance Ing.BEncode OneFileInfo where
   fromBEncode = Ing.fromDict $
     OneFileInfo Ing.<$>! "length"
                 <*> (V.fromList <$> Ing.field (Ing.req "path"))
+
+------------------------------
+-- Results
+------------------------------
+{-
+$ cabal run benc-compare -- +RTS -T
+All
+  crossref
+    Decode
+      benc:              OK
+        27.6 ms ± 2.1 ms,  45 MB allocated,  34 MB copied,  38 MB peak memory
+      bencode:           OK
+        218  ms ±  11 ms, 737 MB allocated,  66 MB copied,  47 MB peak memory
+      AttoBencode:       OK
+        44.8 ms ± 3.8 ms, 129 MB allocated,  41 MB copied,  47 MB peak memory
+      bencoding:         OK
+        39.7 ms ± 3.7 ms, 103 MB allocated,  40 MB copied,  47 MB peak memory
+      bencode match:     OK
+      AttoBencode match: OK
+      bencoding match:   OK
+    Encode
+      benc:              OK
+        11.8 ms ± 1.0 ms,  53 MB allocated, 477 KB copied,  62 MB peak memory
+      bencode:           OK
+        42.4 ms ± 3.1 ms, 113 MB allocated,  41 MB copied,  91 MB peak memory
+      AttoBencode:       OK
+        20.2 ms ± 1.1 ms, 109 MB allocated, 1.6 MB copied,  91 MB peak memory
+      bencoding:         OK
+        11.6 ms ± 1.1 ms,  67 MB allocated, 484 KB copied,  91 MB peak memory
+      bencode match:     OK
+      AttoBencode match: OK
+      bencoding match:   OK
+  ubuntu
+    Decode
+      benc:              OK
+        1.46 μs ±  93 ns, 6.7 KB allocated,   3 B  copied,  91 MB peak memory
+      bencode:           OK
+        28.4 μs ± 1.5 μs, 121 KB allocated,  77 B  copied,  91 MB peak memory
+      AttoBencode:       OK
+        2.97 μs ± 171 ns,  17 KB allocated,   4 B  copied,  91 MB peak memory
+      bencoding:         OK
+        2.38 μs ± 181 ns,  15 KB allocated,   4 B  copied,  91 MB peak memory
+      bencode match:     OK
+      AttoBencode match: OK
+      bencoding match:   OK
+    Encode
+      benc:              OK
+        1.91 μs ± 179 ns,  12 KB allocated,   2 B  copied,  91 MB peak memory
+      bencode:           OK
+        3.19 μs ± 173 ns,  19 KB allocated,  13 B  copied,  91 MB peak memory
+      AttoBencode:       OK
+        10.2 μs ± 387 ns, 295 KB allocated,  26 B  copied,  91 MB peak memory
+      bencoding:         OK
+        1.79 μs ± 100 ns,  15 KB allocated,   2 B  copied,  91 MB peak memory
+      bencode match:     OK
+      AttoBencode match: OK
+      bencoding match:   OK
+-}
