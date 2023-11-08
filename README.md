@@ -76,8 +76,8 @@ with GHC 9.6.3. See the [benchmark file](/compare/Bench.hs) for details.
 | AttoBencode | 44.8 ms ± 3.8 ms | 2.97 μs ± 171 ns |
 | bencoding   | 39.7 ms ± 3.7 ms | 2.38 μs ± 181 ns |
 
-Note: `bencode` parses from a lazy `ByteString` unlike the rest which parse
-from strict `ByteString`s, and so is expected to be a little slower.
+<sup>Note: `bencode` parses from a lazy `ByteString` unlike the rest which parse
+from strict `ByteString`s, and so is expected to be a little slower.</sup>
 
 #### Encoding
 
@@ -88,9 +88,9 @@ from strict `ByteString`s, and so is expected to be a little slower.
 | AttoBencode | 20.2 ms ± 1.1 ms | 10.2 μs ± 387 ns |
 | bencoding   | 11.6 ms ± 1.1 ms | 1.79 μs ± 100 ns |
 
-Note: `AttoBencode` encodes to a strict `ByteString` via a lazy
+<sup>Note: `AttoBencode` encodes to a strict `ByteString` via a lazy
 `ByteString`, unlike the rest, which only prepare the lazy `ByteString`. As
-such, it is expected to be slower.
+such, it is expected to be slower.</sup>
 
 ## Contributing
 

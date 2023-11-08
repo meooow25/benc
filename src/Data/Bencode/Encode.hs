@@ -88,7 +88,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Vector as V
 
-import Data.Bencode.Type
+import Data.Bencode.Type (Value(..))
 
 -- | An encoded Bencode value.
 newtype Encoding = Encoding { unEncoding :: BB.Builder }

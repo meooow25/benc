@@ -30,7 +30,7 @@ maxIntLen :: Int
 maxIntLen = case finiteBitSize (0 :: Int) of
   32 -> 10
   64 -> 19
-  _  -> error "why"
+  _  -> error "unsupported word size"
 
 -- | The input string must be an unsigned decimal integer with no extraneous
 -- leading zeros. Returns Nothing if the value is outside the bounds of a
@@ -55,4 +55,4 @@ maxWordLen :: Int
 maxWordLen = case finiteBitSize (0 :: Word) of
   32 -> 10
   64 -> 20
-  _  -> error "why"
+  _  -> error "unsupported word size"

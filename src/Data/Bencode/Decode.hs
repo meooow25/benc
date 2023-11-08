@@ -78,23 +78,23 @@ module Data.Bencode.Decode
   ) where
 
 import Prelude hiding (fail)
+import Control.Applicative
 import Control.Monad hiding (fail)
 import Control.Monad.ST
 import Control.Monad.Trans.Reader
-import Control.Applicative
-import qualified Data.Foldable as F
-import qualified Data.Primitive.Array as A
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
+import qualified Data.Foldable as F
 import qualified Data.Map as M
+import qualified Data.Primitive.Array as A
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as VM
 
-import qualified Data.Bencode.AST as AST
-import Data.Bencode.Type
+import Data.Bencode.Type (Value(..))
 import Data.Bencode.Util (readKnownNaturalAsInt, readKnownNaturalAsWord)
+import qualified Data.Bencode.AST as AST
 
 newtype ParseResult a = ParseResult { unParseResult :: Either String a }
   deriving (Functor, Applicative, Monad)

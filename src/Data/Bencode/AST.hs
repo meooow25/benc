@@ -3,7 +3,6 @@
 module Data.Bencode.AST
   ( Value(..)
   , KeyValue(..)
-  , ParseOneResult
   , parseOnly
   ) where
 
