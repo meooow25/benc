@@ -26,7 +26,8 @@ This library does not attempt to support
 
 ## Getting started
 
-Please see the Haddocks for `Data.Bencode.Decode` and `Data.Bencode.Encode`.
+Please see the Haddocks for [`Data.Bencode.Decode`](https://hackage.haskell.org/package/benc/docs/Data-Bencode-Decode.html)
+and [`Data.Bencode.Encode`](https://hackage.haskell.org/package/benc/docs/Data-Bencode-Encode.html).
 
 ## Alternatives
 
@@ -59,13 +60,14 @@ All of these are in some combination of buggy, slow, and unmaintained.
 
 ### API comparison
 
-See the [benchmark file](/compare/Bench.hs) as a comparison point of the
-library APIs.
+See the [benchmark file](https://github.com/meooow25/benc/blob/master/compare/Bench.hs)
+as a comparison point of the library APIs.
 
 ### Benchmarks
 
 Below is a comparison of decoding and encoding of two torrent files, performed
-with GHC 9.6.3. See the [benchmark file](/compare/Bench.hs) for details.
+with GHC 9.6.3. See the [benchmark file](https://github.com/meooow25/benc/blob/master/compare/Bench.hs)
+for details.
 
 #### Decoding
 
