@@ -1,13 +1,17 @@
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}  -- Arbitrary instances
 import Test.Tasty
 import Test.Tasty.HUnit
+import Test.Tasty.QuickCheck
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Builder as BB
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BLC
+import qualified Data.Map as M
+import qualified Data.Vector as V
 
 import qualified Data.Bencode.Decode as D
 import qualified Data.Bencode.Encode as E
@@ -18,6 +22,7 @@ main = defaultMain $ testGroup "Tests"
   [ astTests
   , decodeTests
   , encodeTests
+  , encodeDecodeTests
   ]
 
 -- Would like to test Data.Bencode.AST.parseOnly but since it's not exposed
@@ -222,3 +227,39 @@ encodeTests = testGroup "Encode"
 
 enc :: (a -> E.Encoding) -> a -> BL.ByteString 
 enc f = BB.toLazyByteString . E.toBuilder . f
+
+encodeDecodeTests :: TestTree
+encodeDecodeTests = testGroup "EncodeDecode"
+  [ testProperty "decode . encode == Right" $ withMaxSuccess 1000 $
+      \v -> ( D.decode D.value .
+              BL.toStrict .
+              BB.toLazyByteString .
+              E.toBuilder .
+              E.value ) v
+            === Right v
+  ]
+
+instance Arbitrary Ben.Value where
+  arbitrary = sized $ \n -> do
+    n' <- choose (0,n)
+    go (n'+1)
+    where
+      go 1 = do
+        sOrI <- arbitrary
+        if sOrI
+        then Ben.String <$> arbitrary
+        else Ben.Integer <$> arbitrary
+      go n = do
+        ns <- partition n >>= shuffle
+        lOrD <- arbitrary
+        if lOrD
+        then Ben.List . V.fromList <$> traverse go ns
+        else Ben.Dict . M.fromList
+               <$> traverse (\n' -> (,) <$> arbitrary <*> go n') ns
+      partition 0 = pure []
+      partition n = do
+        x <- choose (1,n)
+        (x:) <$> partition (n-x)
+
+instance Arbitrary B.ByteString where
+  arbitrary = B.pack <$> arbitrary
