@@ -113,7 +113,7 @@ string s = Encoding $ BB.intDec (B.length s) <> BB.char7 ':' <> BB.byteString s
 
 -- | Encode an integer as a Bencode integer.
 integer :: Integer -> Encoding
-integer i = Encoding $ BB.char7 'i' <> BB.integerDec i <> BB.char7 'e'
+integer = integer_ BB.integerDec
 
 -- | Encode a @Vector@ as a Bencode list, using the given encoder for elements.
 list :: (a -> Encoding) -> V.Vector a -> Encoding
