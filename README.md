@@ -1,5 +1,7 @@
 # benc
 
+[![Hackage link](https://img.shields.io/hackage/v/benc?color=blue)](https://hackage.haskell.org/package/benc)
+
 Bencode encoding and decoding library
 
 ## Bencode
