@@ -1,5 +1,6 @@
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 -- |
 -- Conversions from Bencoded @ByteString@s to Haskell values.
 --
@@ -71,6 +72,14 @@ module Data.Bencode.Decode
   , field
   , value
   , fail
+  , int64
+  , int32
+  , int16
+  , int8
+  , word64
+  , word32
+  , word16
+  , word8
 
     -- * Recipes
     --
@@ -82,6 +91,8 @@ import Control.Applicative
 import Control.Monad hiding (fail)
 import Control.Monad.ST
 import Control.Monad.Trans.Reader
+import Data.Int
+import Data.Word
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.Foldable as F
@@ -93,7 +104,7 @@ import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as VM
 
 import Data.Bencode.Type (Value(..))
-import Data.Bencode.Util (readKnownNaturalAsInt, readKnownNaturalAsWord)
+import qualified Data.Bencode.Util as Util
 import qualified Data.Bencode.AST as AST
 
 newtype ParseResult a = ParseResult { unParseResult :: Either String a }
@@ -246,8 +257,8 @@ int :: Parser Int
 int = integerDirect >>= maybe (failParser "IntOutOfBounds") pure . go
   where
     go s = case BC.uncons s of
-      Just ('-', s') -> readKnownNaturalAsInt True s'
-      _              -> readKnownNaturalAsInt False s
+      Just ('-', s') -> Util.readKnownNaturalAsInt True s'
+      _              -> Util.readKnownNaturalAsInt False s
 {-# INLINE int #-}
 
 -- | Succeeds only on a Bencode integer that equals the given value.
@@ -265,7 +276,7 @@ word = integerDirect >>= maybe (failParser "WordOutOfBounds") pure . go
   where
     go s = case BC.uncons s of
       Just ('-',_) -> Nothing
-      _            -> readKnownNaturalAsWord s
+      _            -> Util.readKnownNaturalAsWord s
 {-# INLINE word #-}
 
 -- | Decode a @Value@. Always succeeds for valid Bencode.
@@ -288,6 +299,78 @@ field k p =
   maybe (failParser $ "KeyNotFound " ++ show k) pure . binarySearch k >>=
   lift . runParser p
 {-# INLINE field #-}
+
+-- | Decode a Bencode integer as an @Int64@. Fails on a non-integer or if the
+-- integer is out of bounds for an @Int64@.
+int64 :: Parser Int64
+int64 = integerDirect >>= maybe (failParser "IntOutOfBounds") pure . go
+  where
+    go s = case BC.uncons s of
+      Just ('-', s') -> Util.readKnownNaturalAsInt64 True s'
+      _              -> Util.readKnownNaturalAsInt64 False s
+{-# INLINE int64 #-}
+
+-- | Decode a Bencode integer as an @Int32@. Fails on a non-integer or if the
+-- integer is out of bounds for an @Int32@.
+int32 :: Parser Int32
+int32 = intL32
+{-# INLINE int32 #-}
+
+-- | Decode a Bencode integer as an @Int16@. Fails on a non-integer or if the
+-- integer is out of bounds for an @Int16@.
+int16 :: Parser Int16
+int16 = intL32
+{-# INLINE int16 #-}
+
+-- | Decode a Bencode integer as an @Int8@. Fails on a non-integer or if the
+-- integer is out of bounds for an @Int8@.
+int8 :: Parser Int8
+int8 = intL32
+{-# INLINE int8 #-}
+
+-- Parse an Int(<=32) via Int.
+intL32 :: forall a. (Bounded a, Integral a) => Parser a
+intL32 = int >>= \i ->
+  if fromIntegral (minBound :: a) <= i && i <= fromIntegral (maxBound :: a)
+  then pure $! fromIntegral i
+  else failParser "IntOutOfBounds"
+{-# INLINE intL32 #-}
+
+-- | Decode a Bencode integer as a @Word64@. Fails on a non-integer or if the
+-- integer is out of bounds for a @Word64@.
+word64 :: Parser Word64
+word64 = integerDirect >>= maybe (failParser "WordOutOfBounds") pure . go
+  where
+    go s = case BC.uncons s of
+      Just ('-', _) -> Nothing
+      _             -> Util.readKnownNaturalAsWord64 s
+{-# INLINE word64 #-}
+
+-- | Decode a Bencode integer as a @Word32@. Fails on a non-integer or if the
+-- integer is out of bounds for a @Word32@.
+word32 :: Parser Word32
+word32 = wordL32
+{-# INLINE word32 #-}
+
+-- | Decode a Bencode integer as a @Word16@. Fails on a non-integer or if the
+-- integer is out of bounds for a @Word16@.
+word16 :: Parser Word16
+word16 = wordL32
+{-# INLINE word16 #-}
+
+-- | Decode a Bencode integer as a @Word8@. Fails on a non-integer or if the
+-- integer is out of bounds for a @Word8@.
+word8 :: Parser Word8
+word8 = wordL32
+{-# INLINE word8 #-}
+
+-- Parse a Word(<=32) via Word.
+wordL32 :: forall a. (Bounded a, Integral a) => Parser a
+wordL32 = word >>= \i ->
+  if fromIntegral (minBound :: a) <= i && i <= fromIntegral (maxBound :: a)
+  then pure $! fromIntegral i
+  else failParser "WordOutOfBounds"
+{-# INLINE wordL32 #-}
 
 ----------
 -- Utils

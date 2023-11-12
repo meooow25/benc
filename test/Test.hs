@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}  -- Arbitrary instances
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -139,31 +140,16 @@ decodeTests = testGroup "Decode"
     , testCase "le" $ D.decode D.text"le" @?= Left "TypeMismatch String List"
     , testCase "de" $ D.decode D.text"de" @?= Left "TypeMismatch String Dict"
     ]
-  , testGroup "int"
-    [ testCase "i0e" $ D.decode D.int "i0e" @?= Right 0
-    , testCase "i-32e" $ D.decode D.int "i-32e" @?= Right (-32)
-    , let x = show (fromIntegral (minBound :: Int) - 1 :: Integer) in
-      testCase "minBound-1" $ D.decode D.int ("i" <> BC.pack x <> "e") @?= Left "IntOutOfBounds"
-    , testCase "minBound" $ D.decode D.int ("i" <> BC.pack (show (minBound :: Int)) <> "e") @?= Right minBound
-    , testCase "maxBound" $ D.decode D.int ("i" <> BC.pack (show (maxBound :: Int)) <> "e") @?= Right maxBound
-    , let x = show (fromIntegral (maxBound :: Int) + 1 :: Integer) in
-      testCase "maxBound+1" $ D.decode D.int ("i" <> BC.pack x <> "e") @?= Left "IntOutOfBounds"
-    , testCase "i98765432109876543210e" $ D.decode D.int "i98765432109876543210e" @?= Left "IntOutOfBounds"
-    , testCase "0:" $ D.decode D.int "0:" @?= Left "TypeMismatch Integer String"
-    , testCase "le" $ D.decode D.int "le" @?= Left "TypeMismatch Integer List"
-    , testCase "de" $ D.decode D.int "de" @?= Left "TypeMismatch Integer Dict"
-    ]
-  , testGroup "word"
-    [ testCase "i0e" $ D.decode D.word "i0e" @?= Right 0
-    , testCase "i-1e" $ D.decode D.word "i-1e" @?= Left "WordOutOfBounds"
-    , testCase "maxBound" $ D.decode D.word ("i" <> BC.pack (show (maxBound :: Word)) <> "e") @?= Right maxBound
-    , let x = show (fromIntegral (maxBound :: Word) + 1 :: Integer) in
-      testCase "maxBound+1" $ D.decode D.word ("i" <> BC.pack x <> "e") @?= Left "WordOutOfBounds"
-    , testCase "i98765432109876543210e" $ D.decode D.word "i98765432109876543210e" @?= Left "WordOutOfBounds"
-    , testCase "0:" $ D.decode D.word "0:" @?= Left "TypeMismatch Integer String"
-    , testCase "le" $ D.decode D.word "le" @?= Left "TypeMismatch Integer List"
-    , testCase "de" $ D.decode D.word "de" @?= Left "TypeMismatch Integer Dict"
-    ]
+  , testGroupIntegral "int" False D.int
+  , testGroupIntegral "int64" False D.int64
+  , testGroupIntegral "int32" False D.int32
+  , testGroupIntegral "int16" False D.int16
+  , testGroupIntegral "int8" False D.int8
+  , testGroupIntegral "word" True D.word
+  , testGroupIntegral "word64" True D.word64
+  , testGroupIntegral "word32" True D.word32
+  , testGroupIntegral "word16" True D.word16
+  , testGroupIntegral "word8" True D.word8
   , testGroup "field"
     [ testCase "d3:foo3:bare" $ D.decode (D.field "foo" D.string) "d3:foo3:bare" @?= Right "bar"
     , testCase "d3:fooi2ee" $ D.decode (D.field "foo" D.string) "d3:fooi2ee" @?= Left "TypeMismatch String Integer"
@@ -177,6 +163,27 @@ decodeTests = testGroup "Decode"
     [ testCase "3:foo" $ D.decode (D.fail "error!" :: D.Parser B.ByteString) "3:foo" @?= Left "Fail: error!"
     ]
   ]
+  where
+    testGroupIntegral :: forall a. (Bounded a, Integral a, Show a)
+                      => String -> Bool -> D.Parser a -> TestTree
+    testGroupIntegral name isW p = testGroup name
+      [ testCase "i0e" $ D.decode p "i0e" @?= Right 0
+      , testCase "i32e" $ D.decode p "i32e" @?= Right 32
+      , testCase "i-32e" $ D.decode p "i-32e" @?= if isW then Left oob else Right (-32)
+      , testCase "minBound-1" $ D.decode p ("i" <> BC.pack (show (minBoundI - 1)) <> "e") @?= Left oob
+      , testCase "minBound" $ D.decode p ("i" <> BC.pack (show minBoundI) <> "e") @?= Right minBound
+      , testCase "maxBound" $ D.decode p ("i" <> BC.pack (show maxBoundI) <> "e") @?= Right maxBound
+      , testCase "maxBound+1" $ D.decode p ("i" <> BC.pack (show (maxBoundI + 1)) <> "e") @?= Left oob
+      , testCase "i98765432109876543210e" $ D.decode p "i98765432109876543210e" @?= Left oob
+      , testCase "0:" $ D.decode p "0:" @?= Left "TypeMismatch Integer String"
+      , testCase "le" $ D.decode p "le" @?= Left "TypeMismatch Integer List"
+      , testCase "de" $ D.decode p "de" @?= Left "TypeMismatch Integer Dict"
+      ]
+      where
+        minBoundI, maxBoundI :: Integer
+        minBoundI = fromIntegral (minBound :: a)
+        maxBoundI = fromIntegral (maxBound :: a)
+        oob = if isW then "WordOutOfBounds" else "IntOutOfBounds"
 
 encodeTests :: TestTree
 encodeTests = testGroup "Encode"
@@ -202,19 +209,16 @@ encodeTests = testGroup "Encode"
     [ testCase "Hello, World!" $ enc E.text "Hello, World!" @?= "13:Hello, World!"
     , testCase "こんにちは" $ enc E.text "こんにちは" @?= "15:\227\129\147\227\130\147\227\129\171\227\129\161\227\129\175"
     ]
-  , testGroup "int"
-    [ testCase "0" $ enc E.int 0 @?= "i0e"
-    , testCase "1" $ enc E.int 1 @?= "i1e"
-    , testCase "-1" $ enc E.int (-1) @?= "i-1e"
-    , testCase "minBound" $ enc E.int minBound @?= "i" <> BLC.pack (show (minBound :: Int)) <> "e"
-    , testCase "maxBound" $ enc E.int maxBound @?= "i" <> BLC.pack (show (maxBound :: Int)) <> "e"
-    ]
-  , testGroup "word"
-    [ testCase "0" $ enc E.word 0 @?= "i0e"
-    , testCase "1" $ enc E.word 1 @?= "i1e"
-    , testCase "minBound" $ enc E.word minBound @?= "i0e"
-    , testCase "maxBound" $ enc E.word maxBound @?= "i" <> BLC.pack (show (maxBound :: Word)) <> "e"
-    ]
+  , testGroupIntegral "int" False E.int
+  , testGroupIntegral "int64" False E.int64
+  , testGroupIntegral "int32" False E.int32
+  , testGroupIntegral "int16" False E.int16
+  , testGroupIntegral "int8" False E.int8
+  , testGroupIntegral "word" True E.word
+  , testGroupIntegral "word64" True E.word64
+  , testGroupIntegral "word32" True E.word32
+  , testGroupIntegral "word16" True E.word16
+  , testGroupIntegral "word8" True E.word8
   , testGroup "field"
     [ testCase "{}" $ enc id (E.dict' mempty) @?= "de"
     , let e =  E.dict' $
@@ -224,6 +228,17 @@ encodeTests = testGroup "Encode"
       testCase "{one:1,two:two,three:[0,0,0]}" $ enc id e @?= "d3:onei1e5:threeli0ei0ei0ee3:two3:twoe"
     ]
   ]
+  where
+    testGroupIntegral :: forall a. (Bounded a, Integral a, Show a)
+                      => String -> Bool -> (a -> E.Encoding) -> TestTree
+    testGroupIntegral name isW e = testGroup name $
+      [ testCase "0" $ enc e 0 @?= "i0e"
+      , testCase "32" $ enc e 32 @?= "i32e"
+      ] ++
+      [ testCase "-32" $ enc e (-32) @?= "i-32e" | not isW ] ++
+      [ testCase "minBound" $ enc e minBound @?= "i" <> BLC.pack (show (minBound :: a)) <> "e"
+      , testCase "maxBound" $ enc e maxBound @?= "i" <> BLC.pack (show (maxBound :: a)) <> "e"
+      ]
 
 enc :: (a -> E.Encoding) -> a -> BL.ByteString 
 enc f = BB.toLazyByteString . E.toBuilder . f

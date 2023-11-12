@@ -74,13 +74,23 @@ module Data.Bencode.Encode
   , dict'
   , FieldEncodings
   , value
+  , int64
+  , int32
+  , int16
+  , int8
+  , word64
+  , word32
+  , word16
+  , word8
 
   -- * Recipes
   --
   -- $recipes
   ) where
 
+import Data.Int
 import Data.Monoid (Endo(..))
+import Data.Word
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Builder as BB
 import qualified Data.Map as M
@@ -125,11 +135,11 @@ text = string . T.encodeUtf8
 
 -- | Encode an @Int@ as a Bencode integer.
 int :: Int -> Encoding
-int i = Encoding $ BB.char7 'i' <> BB.intDec i <> BB.char7 'e'
+int = integer_ BB.intDec
 
 -- | Encode a @Word@ as a Bencode integer.
 word :: Word -> Encoding
-word w = Encoding $ BB.char7 'i' <> BB.wordDec w <> BB.char7 'e'
+word = integer_ BB.wordDec
 
 -- Option 1
 
@@ -159,6 +169,42 @@ value v = case v of
   Integer i -> integer i
   List vs   -> list value vs
   Dict vs   -> dict value vs
+
+-- | Encode an @Int64@ as a Bencode integer.
+int64 :: Int64 -> Encoding
+int64 = integer_ BB.int64Dec
+
+-- | Encode an @Int32@ as a Bencode integer.
+int32 :: Int32 -> Encoding
+int32 = integer_ BB.int32Dec
+
+-- | Encode an @Int16@ as a Bencode integer.
+int16 :: Int16 -> Encoding
+int16 = integer_ BB.int16Dec
+
+-- | Encode an @Int8@ as a Bencode integer.
+int8 :: Int8 -> Encoding
+int8 = integer_ BB.int8Dec
+
+-- | Encode a @Word64@ as a Bencode integer.
+word64 :: Word64 -> Encoding
+word64 = integer_ BB.word64Dec
+
+-- | Encode a @Word32@ as a Bencode integer.
+word32 :: Word32 -> Encoding
+word32 = integer_ BB.word32Dec
+
+-- | Encode a @Word16@ as a Bencode integer.
+word16 :: Word16 -> Encoding
+word16 = integer_ BB.word16Dec
+
+-- | Encode a @Word8@ as a Bencode integer.
+word8 :: Word8 -> Encoding
+word8 = integer_ BB.word8Dec
+
+integer_ :: (a -> BB.Builder) -> a -> Encoding
+integer_ f = \x -> Encoding $ BB.char7 'i' <> f x <> BB.char7 'e'
+{-# INLINE integer_ #-}
 
 -- $recipes
 -- Recipies for some common and uncommon usages.
