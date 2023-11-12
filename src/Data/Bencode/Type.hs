@@ -1,9 +1,8 @@
 -- |
 -- This module defines the 'Value' type to represent any valid Bencode value.
 --
--- Generally you will want to write decoders and encoders to work with your
--- own types. See "Data.Bencode.Decode" and "Data.Bencode.Encode" to get
--- started.
+-- See "Data.Bencode.Decode" and "Data.Bencode.Encode" to perform decoding
+-- and encoding.
 --
 module Data.Bencode.Type
   ( Value(..)
