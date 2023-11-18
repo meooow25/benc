@@ -2,71 +2,22 @@
 -- |
 -- Conversions from Haskell values to Bencoded @ByteString@s.
 --
--- == Introduction
---
--- Encoding is done using encoders. An encoder is simply a function from a
--- Haskell type to 'Encoding'. There are encoders for the four Bencode types:
---
--- * 'string' encodes 'B.ByteString's as Bencode strings
--- * 'integer' encodes 'Prelude.Integer's as Bencode integers
--- * 'list' encodes 'V.Vector's as Bencode lists
--- * 'dict' encodes 'M.Map's with 'B.ByteString' keys as Bencode dictionaries
---
--- These can used to build more complex encoders for arbitrary types.
---
--- @
--- data File = File
---   { hash :: ByteString
---   , size :: Integer
---   , tags :: Vector Text
---   } deriving Show
--- @
---
--- It is reasonable to encode a @File@ as a Bencode dictionary with the field
--- names as keys, and appropriate types for the values.
---
--- @
--- {-# LANGUAGE OverloadedStrings #-}
--- import qualified Data.Bencode.Encode as E
---
--- encodeFile :: File -> E.'Encoding'
--- encodeFile (File hash size tags) = E.'dict'' $
---      E.'field' "hash" E.'string' hash
---   <> E.'field' "size" E.'integer' size
---   <> E.'field' "tags" (E.'list' E.'text') tags
--- @
---
--- Applying 'toBuilder' to an 'Encoding' gives a @ByteString@
--- 'Data.ByteString.Builder', which can then be converted to a lazy
--- @ByteString@, written to a file, or used otherwise.
---
--- @
--- import qualified Data.ByteString.Builder (toLazyByteString)
--- import qualified Data.Vector as V
--- @
---
--- >>> toLazyByteString $ encodeFile $ File "xxxx" 1024 (V.fromList ["work", "backup"])
--- "d4:hash4:xxxx4:sizei1024e4:tagsl4:work6:backupee"
---
--- In this module, encodings are total conversions from Haskell values to
--- @ByteString@s. If some data should fail to encode, it should be handled
--- separately.
---
--- For more examples, see the \"Recipes\" section at the end of this page.
-
 module Data.Bencode.Encode
   (
-  -- * Encoding
+    -- * Quick start
+    -- $quick
+
+    -- * Encoding
     Encoding
   , toBuilder
 
-  -- * Primary encoders
+    -- * Primary encoders
   , string
   , integer
   , list
   , dict
 
-  -- * More encoders
+    -- * More encoders
   , text
   , int
   , word
@@ -83,9 +34,8 @@ module Data.Bencode.Encode
   , word16
   , word8
 
-  -- * Recipes
-  --
-  -- $recipes
+    -- * Recipes #recipes#
+    -- $recipes
   ) where
 
 import Data.Int
@@ -140,8 +90,6 @@ int = integer_ BB.intDec
 -- | Encode a @Word@ as a Bencode integer.
 word :: Word -> Encoding
 word = integer_ BB.wordDec
-
--- Option 1
 
 -- | A key-value encoding for a Bencode dictionary.
 field :: B.ByteString -> (a -> Encoding) -> a -> FieldEncodings
@@ -206,8 +154,65 @@ integer_ :: (a -> BB.Builder) -> a -> Encoding
 integer_ f = \x -> Encoding $ BB.char7 'i' <> f x <> BB.char7 'e'
 {-# INLINE integer_ #-}
 
+------------------------------
+-- Documentation
+------------------------------
+
+-- $quick
+-- Encoding is done using encoders. An encoder is simply a function from a
+-- Haskell type to 'Encoding'. There are encoders for the four Bencode types:
+--
+-- * 'string' encodes 'B.ByteString's as Bencode strings
+-- * 'integer' encodes 'Prelude.Integer's as Bencode integers
+-- * 'list' encodes 'V.Vector's as Bencode lists
+-- * 'dict' encodes 'M.Map's with 'B.ByteString' keys as Bencode dictionaries
+--
+-- These can used to build more complex encoders for arbitrary types.
+--
+-- @
+-- data File = File
+--   { hash :: ByteString
+--   , size :: Integer
+--   , tags :: Vector Text
+--   } deriving Show
+-- @
+--
+-- It is reasonable to encode a @File@ as a Bencode dictionary with the field
+-- names as keys, and appropriate types for the values.
+--
+-- @
+-- {-# LANGUAGE OverloadedStrings #-}
+-- import qualified Data.Bencode.Encode as E
+--
+-- encodeFile :: File -> E.'Encoding'
+-- encodeFile (File hash size tags) = E.'dict'' $
+--      E.'field' "hash" E.'string' hash
+--   <> E.'field' "size" E.'integer' size
+--   <> E.'field' "tags" (E.'list' E.'text') tags
+-- @
+--
+-- Applying 'toBuilder' to an 'Encoding' gives a @ByteString@
+-- 'Data.ByteString.Builder', which can then be converted to a lazy
+-- @ByteString@, written to a file, or used otherwise.
+--
+-- @
+-- import qualified Data.ByteString.Builder (toLazyByteString)
+-- import qualified Data.Vector as V
+-- @
+--
+-- >>> toLazyByteString $ encodeFile $ File "xxxx" 1024 (V.fromList ["work", "backup"])
+-- "d4:hash4:xxxx4:sizei1024e4:tagsl4:work6:backupee"
+--
+-- In this module, encodings are total conversions from Haskell values to
+-- @ByteString@s. If some data should fail to encode, it should be handled
+-- separately.
+--
+-- For more examples, see the [Recipes](#g:recipes) section at the end of this
+-- page.
+
+
 -- $recipes
--- Recipies for some common and uncommon usages.
+-- Recipes for some common and uncommon usages.
 --
 -- The following preface is assumed.
 --

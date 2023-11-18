@@ -4,54 +4,12 @@
 -- |
 -- Conversions from Bencoded @ByteString@s to Haskell values.
 --
--- == Introduction
---
--- Decoding is done using parsers. There are parsers for the four Bencode types:
---
--- * 'string' decodes Bencode strings as 'B.ByteString's
--- * 'integer' decodes Bencode integers as 'Prelude.Integer's
--- * 'list' decodes Bencode lists as 'V.Vector's
--- * 'dict' decodes Bencode dictionaries as 'M.Map's with 'B.ByteString' keys.
---
--- These can be used to build more complex parsers for arbitrary types.
---
--- @
--- data File = File
---   { hash :: ByteString
---   , size :: Integer
---   , tags :: Vector Text
---   } deriving Show
--- @
---
--- Assuming a @File@ is encoded as a Bencode dictionary with the field names as
--- keys and appropriate value types, a parser for @File@ can be defined as
---
--- @
--- {-# LANGUAGE OverloadedStrings #-}
--- import qualified Data.Bencode.Decode as D
---
--- fileParser :: D.'Parser' File
--- fileParser =
---   File \<\$> D.'field' "hash" D.'string'
---        \<*> D.'field' "size" D.'integer'
---        \<*> D.'field' "tags" (D.'list' D.'text')
--- @
---
--- The parser can then be run on a @ByteString@ with 'decode'.
---
--- >>> D.decode fileParser "d4:hash4:xxxx4:sizei1024e4:tagsl4:work6:backupee"
--- Right (File {hash = "xxxx", size = 1024, tags = ["work","backup"]})
---
--- Of course, invalid Bencode or Bencode that does not satisfy our @File@ parser
--- will fail to decode.
---
--- >>> D.decode fileParser "d4:hash4:xxxx4:tagsl4:work6:backupee"
--- Left "KeyNotFound \"size\""
---
--- For more examples, see the \"Recipes\" section at the end of this page.
---
 module Data.Bencode.Decode
-  ( -- * Parser
+  (
+    -- * Quick start
+    -- $quick
+
+    -- * Parser
     Parser
   , decode
   , decodeMaybe
@@ -81,8 +39,7 @@ module Data.Bencode.Decode
   , word16
   , word8
 
-    -- * Recipes
-    --
+    -- * Recipes #recipes#
     -- $recipes
   ) where
 
@@ -133,7 +90,8 @@ failParser = lift . failResult
 {-# INLINE failParser #-}
 
 -- | Decode a value from the given @ByteString@. If decoding fails, returns
--- @Left@ with a failure message.
+-- @Left@ with a failure message. The message is a short human-readable error
+-- description and should not be relied on programmatically.
 decode :: Parser a -> B.ByteString -> Either String a
 decode p s = AST.parseOnly s >>= unParseResult . runParser p
 
@@ -372,9 +330,6 @@ wordL32 = word >>= \i ->
   else failParser "WordOutOfBounds"
 {-# INLINE wordL32 #-}
 
-----------
--- Utils
-
 -- | Binary search. The array must be sorted by key.
 binarySearch :: B.ByteString -> A.Array AST.KeyValue -> Maybe AST.Value
 binarySearch k a = go 0 (A.sizeofArray a)
@@ -389,6 +344,57 @@ binarySearch k a = go 0 (A.sizeofArray a)
         m = fromIntegral ((fromIntegral (l+r) :: Word) `div` 2) :: Int
         AST.KeyValue k' v = A.indexArray a m
 {-# INLINABLE binarySearch #-}
+
+------------------------------
+-- Documentation
+------------------------------
+
+-- $quick
+-- Decoding is done using parsers. There are parsers for the four Bencode types:
+--
+-- * 'string' decodes Bencode strings as 'B.ByteString's
+-- * 'integer' decodes Bencode integers as 'Prelude.Integer's
+-- * 'list' decodes Bencode lists as 'V.Vector's
+-- * 'dict' decodes Bencode dictionaries as 'M.Map's with 'B.ByteString' keys.
+--
+-- These can be used to build more complex parsers for arbitrary types.
+--
+-- @
+-- data File = File
+--   { hash :: ByteString
+--   , size :: Integer
+--   , tags :: Vector Text
+--   } deriving Show
+-- @
+--
+-- Assuming a @File@ is encoded as a Bencode dictionary with the field names as
+-- keys and appropriate value types, a parser for @File@ can be defined as
+--
+-- @
+-- {-# LANGUAGE OverloadedStrings #-}
+-- import qualified Data.Bencode.Decode as D
+--
+-- fileParser :: D.'Parser' File
+-- fileParser =
+--   File \<\$> D.'field' "hash" D.'string'
+--        \<*> D.'field' "size" D.'integer'
+--        \<*> D.'field' "tags" (D.'list' D.'text')
+-- @
+--
+-- The parser can then be run on a @ByteString@ with 'decode'.
+--
+-- >>> D.decode fileParser "d4:hash4:xxxx4:sizei1024e4:tagsl4:work6:backupee"
+-- Right (File {hash = "xxxx", size = 1024, tags = ["work","backup"]})
+--
+-- Of course, invalid Bencode or Bencode that does not satisfy the @File@ parser
+-- will fail to decode.
+--
+-- >>> D.decode fileParser "d4:hash4:xxxx4:tagsl4:work6:backupee"
+-- Left "KeyNotFound \"size\""
+--
+-- For more examples, see the [Recipes](#g:recipes) section at the end of this
+-- page.
+
 
 -- $recipes
 -- Recipes for some common and uncommon usages.
