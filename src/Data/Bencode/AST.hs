@@ -163,6 +163,7 @@ parseInteger s !pos = case BC.uncons s of
       Just (c,s'') -> case c of
         'e' -> Right (x, s'', pos'+1)
         _   -> errEnd (Just c) pos'
+    {-# INLINE end #-}
 {-# INLINE parseInteger #-}
 
 -- | Parse a Bencode string. From the length count to the end of the string.

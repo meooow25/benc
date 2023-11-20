@@ -69,17 +69,20 @@ integer = integer_ BB.integerDec
 list :: (a -> Encoding) -> V.Vector a -> Encoding
 list enc vs =
   Encoding $ BB.char7 'l' <> foldMap (unEncoding . enc) vs <> BB.char7 'e'
+{-# INLINE list #-}
 
 -- | Encode a @Map@ as a Bencode dictionary, using the given encoder for values.
 dict :: (a -> Encoding) -> M.Map B.ByteString a -> Encoding
 dict enc kvs = Encoding $ BB.char7 'd' <> f kvs <> BB.char7 'e'
   where
     f = M.foldMapWithKey (\k v -> unEncoding (string k) <> unEncoding (enc v))
+{-# INLINE dict #-}
 
 -- | Encode @Text@ as a Bencode string. As per the Bencode specification, all
 -- text must be encoded as UTF-8 strings.
 text :: T.Text -> Encoding
 text = string . T.encodeUtf8
+{-# INLINE text #-}
 -- TODO: Check if Text's encodeUtf8Builder is more efficient. But we would
 -- also need to know the UTF-8 len, which is only viable for text >= 2.0.
 
@@ -102,6 +105,7 @@ field k enc v = FE (Endo ((k, enc v):))
 -- arbitrary key-value pair among them will be encoded and the rest discarded.
 dict' :: FieldEncodings -> Encoding
 dict' = dict id . M.fromList . ($ []) . appEndo . unFE
+{-# INLINE dict' #-}
 
 -- | Key-value encodings for a Bencode dictionary.
 newtype FieldEncodings = FE { unFE :: Endo [(B.ByteString, Encoding)] }

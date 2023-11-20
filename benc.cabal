@@ -60,6 +60,26 @@ test-suite benc-test
     default-language: Haskell2010
     type:             exitcode-stdio-1.0
 
+benchmark benc-bench
+    import:           warnings
+
+    build-depends:
+        base
+      , benc
+      , deepseq
+      , tasty
+      , tasty-bench
+      , tasty-hunit
+      , bytestring
+      , containers
+      , text
+      , vector
+
+    hs-source-dirs:   bench
+    main-is:          Bench.hs
+    default-language: Haskell2010
+    type:             exitcode-stdio-1.0
+
 benchmark benc-compare
     import:           warnings
 
