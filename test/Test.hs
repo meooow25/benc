@@ -276,5 +276,11 @@ instance Arbitrary Ben.Value where
         x <- choose (1,n)
         (x:) <$> partition (n-x)
 
+  shrink (Ben.String s)  = Ben.String <$> shrink s
+  shrink (Ben.Integer i) = Ben.Integer <$> shrink i
+  shrink (Ben.List xs)   = Ben.List . V.fromList <$> shrink (V.toList xs)
+  shrink (Ben.Dict kxs)  = Ben.Dict . M.fromList <$> shrink (M.toList kxs)
+
 instance Arbitrary B.ByteString where
   arbitrary = B.pack <$> arbitrary
+  shrink = map B.pack . shrink . B.unpack
