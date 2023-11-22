@@ -6,6 +6,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 
+import Control.Applicative
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Builder as BB
 import qualified Data.ByteString.Char8 as BC
@@ -151,13 +152,35 @@ decodeTests = testGroup "Decode"
   , testGroupIntegral "word16" True D.word16
   , testGroupIntegral "word8" True D.word8
   , testGroup "field"
-    [ testCase "d3:foo3:bare" $ D.decode (D.field "foo" D.string) "d3:foo3:bare" @?= Right "bar"
+    [ testCase "de" $ D.decode (D.field "foo" D.string) "de" @?= Left "KeyNotFound \"foo\""
+    , testCase "d3:foo3:bare" $ D.decode (D.field "foo" D.string) "d3:foo3:bare" @?= Right "bar"
+    , let p = D.field "bar" D.string <|> D.field "foo" D.string in
+      testCase "d3:foo3:bare alt" $ D.decode p "d3:foo3:bare" @?= Right "bar"
     , testCase "d3:fooi2ee" $ D.decode (D.field "foo" D.string) "d3:fooi2ee" @?= Left "TypeMismatch String Integer"
     , let p = (,,) <$> D.field "one" D.integer
                    <*> D.field "two" D.string
                    <*> D.field "three" (D.list D.integer) in
       testCase "d3:onei1e5:threeli0ei0ei0ee3:two3:twoe" $
         D.decode p "d3:onei1e5:threeli0ei0ei0ee3:two3:twoe" @?= Right (1, "two", [0,0,0])
+    , testCase "0:" $ D.decode (D.field "foo" D.string) "0:" @?= Left "TypeMismatch Dict String"
+    , testCase "i0e" $ D.decode (D.field "foo" D.string) "i0e" @?= Left "TypeMismatch Dict Integer"
+    , testCase "le" $ D.decode (D.field "foo" D.string) "le" @?= Left "TypeMismatch Dict List"
+    ]
+  , testGroup "dict'"
+    [ testCase "de" $ D.decode (D.dict' $ D.field' "foo" D.string) "de" @?= Left "KeyNotFound \"foo\""
+    , testCase "d3:foo3:bare" $ D.decode (D.dict' $ pure ()) "d3:foo3:bare" @?= Left "UnrecognizedKey \"foo\""
+    , let p = D.dict' $ D.field' "bar" D.string <|> D.field' "foo" D.string in
+      testCase "d3:foo3:bare alt" $ D.decode p "d3:foo3:bare" @?= Right "bar"
+    , testCase "d3:fooi2ee" $ D.decode (D.dict' $ D.field' "foo" D.string) "d3:fooi2ee" @?= Left "TypeMismatch String Integer"
+    , let p = D.dict' $
+                (,,) <$> D.field' "one" D.integer
+                     <*> D.field' "two" D.string
+                     <*> D.field' "three" (D.list D.integer) in
+      testCase "d3:onei1e5:threeli0ei0ei0ee3:two3:twoe" $
+        D.decode p "d3:onei1e5:threeli0ei0ei0ee3:two3:twoe" @?= Right (1, "two", [0,0,0])
+    , testCase "0:" $ D.decode (D.dict' $ pure ()) "0:" @?= Left "TypeMismatch Dict String"
+    , testCase "i0e" $ D.decode (D.dict' $ pure ()) "i0e" @?= Left "TypeMismatch Dict Integer"
+    , testCase "le" $ D.decode (D.dict' $ pure ()) "le" @?= Left "TypeMismatch Dict List"
     ]
   , testGroup "fail"
     [ testCase "3:foo" $ D.decode (D.fail "error!" :: D.Parser B.ByteString) "3:foo" @?= Left "Fail: error!"

@@ -33,6 +33,7 @@ main =  defaultMain
     , envPure ldData  $ bench "list dict" . whnf decListDict
     , envPure ldData2 $ bench "list fields" . whnf decListFields
     , envPure liData  $ bench "list word16" . whnf decListWord16
+    , envPure ldData2 $ bench "list dict'" . whnf decListDict'
     ]
   , bgroup "Encode"
     [ bench "string"      $ whnf encManyString n
@@ -141,6 +142,22 @@ decListFields = runP (D.list foo)
 decListWord16 :: B.ByteString -> V.Vector Word16
 decListWord16 = runP (D.list D.word16)
 {-# NOINLINE decListWord16 #-}
+
+decListDict' :: B.ByteString -> V.Vector ()
+decListDict' = runP (D.list foo)
+  where
+    foo = D.dict' $ do
+      D.field' "0" (pure ())
+      D.field' "1" (pure ())
+      D.field' "2" (pure ())
+      D.field' "3" (pure ())
+      D.field' "4" (pure ())
+      D.field' "5" (pure ())
+      D.field' "6" (pure ())
+      D.field' "7" (pure ())
+      D.field' "8" (pure ())
+      D.field' "9" (pure ())
+{-# NOINLINE decListDict' #-}
 
 runP :: D.Parser a -> B.ByteString -> a
 runP p = either error id . D.decode p

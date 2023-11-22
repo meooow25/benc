@@ -1,6 +1,8 @@
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE MagicHash #-}
+{-# LANGUAGE UnboxedTuples #-}
 -- |
 -- Conversions from Bencoded @ByteString@s to Haskell values.
 --
@@ -28,6 +30,9 @@ module Data.Bencode.Decode
   , intEq
   , word
   , field
+  , field'
+  , dict'
+  , Fields'
   , value
   , fail
   , int64
@@ -47,18 +52,22 @@ import Prelude hiding (fail)
 import Control.Applicative
 import Control.Monad hiding (fail)
 import Control.Monad.ST
+import Control.Monad.Trans.Class
 import Control.Monad.Trans.Reader
+import Control.Monad.Trans.State.Strict
 import Data.Int
 import Data.Word
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.Foldable as F
+import qualified Data.IntSet as IS
 import qualified Data.Map as M
 import qualified Data.Primitive.Array as A
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as VM
+import qualified GHC.Exts as X
 
 import Data.Bencode.Type (Value(..))
 import qualified Data.Bencode.Util as Util
@@ -76,17 +85,21 @@ instance Alternative ParseResult where
   l <|> r = ParseResult $ unParseResult l <> unParseResult r
   -- Discards left error, not ideal
 
+instance MonadPlus ParseResult
+-- Does not satisfy v >> mzero = mzero because of the failure String
+-- But required for Alternative (StateT _ ParseResult)
+
 -- | A parser from a Bencode value to a Haskell value.
 newtype Parser a = Parser { runParser :: AST.Value -> ParseResult a }
   deriving (Functor, Applicative, Alternative, Monad)
     via ReaderT AST.Value ParseResult
 
-lift :: ParseResult a -> Parser a
-lift = Parser . const
-{-# INLINE lift #-}
+liftP :: ParseResult a -> Parser a
+liftP = Parser . const
+{-# INLINE liftP #-}
 
 failParser :: String -> Parser a
-failParser = lift . failResult
+failParser = liftP . failResult
 {-# INLINE failParser #-}
 
 -- | Decode a value from the given @ByteString@. If decoding fails, returns
@@ -161,7 +174,7 @@ integer = toI <$!> integerDirect
 -- | Decode a Bencode list with the given parser for elements. Fails on a
 -- non-list or if any element in the list fails to parse.
 list :: Parser a -> Parser (V.Vector a)
-list p = listDirect >>= lift . traverseAToV (runParser p)
+list p = listDirect >>= liftP . traverseAToV (runParser p)
 {-# INLINE list #-}
 
 traverseAToV :: (a -> ParseResult b) -> A.Array a -> ParseResult (V.Vector b)
@@ -180,7 +193,7 @@ traverseAToV f a = runST $ do
 -- non-dict or if any value in the dict fails to parse.
 dict :: Parser a -> Parser (M.Map B.ByteString a)
 dict p =
-  dictDirect >>= lift . fmap M.fromDistinctAscList . traverse f .  F.toList
+  dictDirect >>= liftP . fmap M.fromDistinctAscList . traverse f .  F.toList
   where
     f (AST.KeyValue k v) = (,) k <$> runParser p v
 {-# INLINE dict #-}
@@ -251,12 +264,49 @@ fail = failParser . ("Fail: " ++ )
 
 -- | Decode a value with the given parser for the given key. Fails on a
 -- non-dict, if the key is absent, or if the value parser fails.
+--
+-- If keys should not be left over in the dict, use 'field'' and 'dict''
+-- instead.
 field :: B.ByteString -> Parser a -> Parser a
-field k p =
-  dictDirect >>=
-  maybe (failParser $ "KeyNotFound " ++ show k) pure . binarySearch k >>=
-  lift . runParser p
+field k p = do
+  a <- dictDirect
+  case binarySearch k a of
+    (# _ |            #) -> failParser $ "KeyNotFound " ++ show k
+    (#   | (# _, x #) #) -> liftP $ runParser p x
 {-# INLINE field #-}
+
+-- | Decode a value with the given parser for the given key. Convert to a
+-- @Parser@ with 'dict''.
+field' :: B.ByteString -> Parser a -> Fields' a
+field' k p = Fields' $ ReaderT $ \a -> case binarySearch k a of
+  (# _ |             #) -> lift . failResult $ "KeyNotFound " ++ show k
+  (#   | (# i#, v #) #) -> lift (runParser p v) <* modify' (IS.insert (X.I# i#))
+{-# INLINE field' #-}
+
+-- | Create a @Parser@ from a 'Fields''. Fails on a non-dict, if a key is
+-- absent, or if any value fails to parse. Also fails if there are leftover
+-- unparsed keys in the dict.
+--
+-- If leftover keys should be ignored, use 'field' instead.
+dict' :: Fields' a -> Parser a
+dict' fs = do
+  a <- dictDirect
+  liftP $ do
+    (v, is) <- runStateT (runReaderT (runFields' fs) a) IS.empty
+    if IS.size is == A.sizeofArray a
+    then pure v
+    else let i = if IS.null is then 0 else IS.findMin is - 1
+             AST.KeyValue k _ = A.indexArray a i
+         in failResult $ "UnrecognizedKey " ++ show k
+{-# INLINE dict' #-}
+
+-- | Key-value parsers. See 'dict'' and 'field''.
+newtype Fields' a = Fields'
+  { runFields' ::
+      ReaderT (A.Array AST.KeyValue) (StateT IS.IntSet ParseResult) a
+  } deriving (Functor, Applicative, Alternative, Monad)
+-- We could use WriterT (CPS) but StateT is a teeny bit more efficient because
+-- we can do IS.insert x instead of IS.union (IS.singleton x).
 
 -- | Decode a Bencode integer as an @Int64@. Fails on a non-integer or if the
 -- integer is out of bounds for an @Int64@.
@@ -330,20 +380,29 @@ wordL32 = word >>= \i ->
   else failParser "WordOutOfBounds"
 {-# INLINE wordL32 #-}
 
+
 -- | Binary search. The array must be sorted by key.
-binarySearch :: B.ByteString -> A.Array AST.KeyValue -> Maybe AST.Value
+binarySearch
+  :: B.ByteString
+  -> A.Array AST.KeyValue
+  -> (# (# #) | (# X.Int#,  AST.Value #) #)
 binarySearch k a = go 0 (A.sizeofArray a)
   where
-    go l r | l == r = Nothing
+    go l r | l == r = (# (# #) | #)
     go l r = case compare k k' of
       LT -> go l m
-      EQ -> Just v
+      EQ -> (# | (# case m of X.I# m# -> m#, v #) #)
       GT -> go (m+1) r
       where
         -- Overflow, careful!
         m = fromIntegral ((fromIntegral (l+r) :: Word) `div` 2) :: Int
         AST.KeyValue k' v = A.indexArray a m
 {-# INLINABLE binarySearch #-}
+-- binarySearch returns an unboxed type, which serves as an equivalent of
+-- Maybe (Int, Value). This is to avoid allocating the Just and the I#. This
+-- won't be necessary if GHC gets
+-- https://gitlab.haskell.org/ghc/ghc/-/issues/14259.
+-- A (not-so-good) alternative is to inline binarySearch.
 
 ------------------------------
 -- Documentation
@@ -446,6 +505,23 @@ binarySearch k a = go 0 (A.sizeofArray a)
 -- Right Green
 -- >>> D.decode colorParser "5:black"
 -- Left "Fail: unknown color"
+--
+-- === Decode a dict, failing on leftover keys
+--
+-- @
+-- data File = File { name :: Text, size :: Int } deriving Show
+--
+-- fileParser :: D.'Parser' File
+-- fileParser = D.'dict'' $
+--   File
+--     \<$> D.'field'' "name" D.'text'
+--     \<*> D.'field'' "size" D.'int'
+-- @
+--
+-- >>> D.decode fileParser "d4:name9:hello.txt4:sizei32ee"
+-- Right (File {name = "hello.txt", size = 32})
+-- >>> D.decode fileParser "d6:hiddeni1e4:name9:hello.txt4:sizei32ee"
+-- Left "UnrecognizedKey \"hidden\""
 --
 -- === Decode differently based on dict contents
 --
