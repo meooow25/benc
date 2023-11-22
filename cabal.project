@@ -1,2 +1,6 @@
-packages: .
-benchmarks: True
+packages:
+    .
+    compare/
+
+package compare
+    benchmarks: True

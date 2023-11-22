@@ -1,6 +1,7 @@
 # benc
 
-[![Hackage link](https://img.shields.io/hackage/v/benc?color=blue)](https://hackage.haskell.org/package/benc)
+[![Hackage](https://img.shields.io/hackage/v/benc?logo=haskell&color=blue)](https://hackage.haskell.org/package/benc)
+[![Haskell-CI](https://github.com/meooow25/benc/actions/workflows/haskell-ci.yml/badge.svg)](https://github.com/meooow25/benc/actions/workflows/haskell-ci.yml)
 
 Bencode encoding and decoding library
 
