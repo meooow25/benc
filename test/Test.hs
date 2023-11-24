@@ -154,6 +154,7 @@ decodeTests = testGroup "Decode"
   , testGroup "field"
     [ testCase "de" $ D.decode (D.field "foo" D.string) "de" @?= Left "KeyNotFound \"foo\""
     , testCase "d3:foo3:bare" $ D.decode (D.field "foo" D.string) "d3:foo3:bare" @?= Right "bar"
+    , testCase "d3:baz3:qux3:foo3:bare" $ D.decode (D.field "baz" D.string) "d3:baz3:qux3:foo3:bare" @?= Right "qux"
     , let p = D.field "bar" D.string <|> D.field "foo" D.string in
       testCase "d3:foo3:bare alt" $ D.decode p "d3:foo3:bare" @?= Right "bar"
     , testCase "d3:fooi2ee" $ D.decode (D.field "foo" D.string) "d3:fooi2ee" @?= Left "TypeMismatch String Integer"
@@ -168,7 +169,8 @@ decodeTests = testGroup "Decode"
     ]
   , testGroup "dict'"
     [ testCase "de" $ D.decode (D.dict' $ D.field' "foo" D.string) "de" @?= Left "KeyNotFound \"foo\""
-    , testCase "d3:foo3:bare" $ D.decode (D.dict' $ pure ()) "d3:foo3:bare" @?= Left "UnrecognizedKey \"foo\""
+    , testCase "d3:foo3:bare" $ D.decode (D.dict' $ D.field' "foo" D.string) "d3:foo3:bare" @?= Right "bar"
+    , testCase "d3:baz3:qux3:foo3:bare" $ D.decode (D.dict' $ D.field' "baz" D.string) "d3:baz3:qux3:foo3:bare" @?= Left "UnrecognizedKey \"foo\""
     , let p = D.dict' $ D.field' "bar" D.string <|> D.field' "foo" D.string in
       testCase "d3:foo3:bare alt" $ D.decode p "d3:foo3:bare" @?= Right "bar"
     , testCase "d3:fooi2ee" $ D.decode (D.dict' $ D.field' "foo" D.string) "d3:fooi2ee" @?= Left "TypeMismatch String Integer"

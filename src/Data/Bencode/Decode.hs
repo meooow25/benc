@@ -295,7 +295,7 @@ dict' fs = do
     (v, is) <- runStateT (runReaderT (runFields' fs) a) IS.empty
     if IS.size is == A.sizeofArray a
     then pure v
-    else let i = if IS.null is then 0 else IS.findMin is - 1
+    else let i = head $ filter (`IS.notMember` is) [0..]
              AST.KeyValue k _ = A.indexArray a i
          in failResult $ "UnrecognizedKey " ++ show k
 {-# INLINE dict' #-}
