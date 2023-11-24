@@ -86,7 +86,7 @@ instance Alternative ParseResult where
   -- Discards left error, not ideal
 
 instance MonadPlus ParseResult
--- Does not satisfy v >> mzero = mzero because of the failure String
+-- Does not satisfy MonadPlus laws because of the failure String
 -- But required for Alternative (StateT _ ParseResult)
 
 -- | A parser from a Bencode value to a Haskell value.
@@ -399,7 +399,7 @@ binarySearch k a = go 0 (A.sizeofArray a)
         AST.KeyValue k' v = A.indexArray a m
 {-# INLINABLE binarySearch #-}
 -- binarySearch returns an unboxed type, which serves as an equivalent of
--- Maybe (Int, Value). This is to avoid allocating the Just and the I#. This
+-- Maybe (Int, Value). This is to avoid allocating the (,) and the I#. This
 -- won't be necessary if GHC gets
 -- https://gitlab.haskell.org/ghc/ghc/-/issues/14259.
 -- A (not-so-good) alternative is to inline binarySearch.
