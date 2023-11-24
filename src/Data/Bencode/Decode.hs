@@ -1,4 +1,3 @@
-{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE MagicHash #-}
@@ -90,12 +89,15 @@ instance MonadPlus ParseResult
 -- But required for Alternative (StateT _ ParseResult)
 
 -- | A parser from a Bencode value to a Haskell value.
-newtype Parser a = Parser { runParser :: AST.Value -> ParseResult a }
+newtype Parser a = Parser { runParser_ :: ReaderT AST.Value ParseResult a }
   deriving (Functor, Applicative, Alternative, Monad)
-    via ReaderT AST.Value ParseResult
+
+runParser :: Parser a -> AST.Value -> ParseResult a
+runParser = runReaderT . runParser_
+{-# INLINE runParser #-}
 
 liftP :: ParseResult a -> Parser a
-liftP = Parser . const
+liftP = Parser . lift
 {-# INLINE liftP #-}
 
 failParser :: String -> Parser a
@@ -128,27 +130,27 @@ errTypeMismatch a b = failResult $ "TypeMismatch " ++ a ++ " " ++ b'
 -- Eithers using "case-of-case".
 
 stringDirect :: Parser B.ByteString
-stringDirect = Parser $ \v -> case v of
+stringDirect = Parser $ ReaderT $ \v -> case v of
   AST.String s -> pure s
-  _ -> errTypeMismatch "String" v
+  _            -> errTypeMismatch "String" v
 {-# INLINE stringDirect #-}
 
 integerDirect :: Parser B.ByteString
-integerDirect = Parser $ \v -> case v of
+integerDirect = Parser $ ReaderT $ \v -> case v of
   AST.Integer s -> pure s
-  _ -> errTypeMismatch "Integer" v
+  _             -> errTypeMismatch "Integer" v
 {-# INLINE integerDirect #-}
 
 listDirect :: Parser (A.Array AST.Value)
-listDirect = Parser $ \v -> case v of
+listDirect = Parser $ ReaderT $ \v -> case v of
   AST.List a -> pure a
-  _ -> errTypeMismatch "List" v
+  _          -> errTypeMismatch "List" v
 {-# INLINE listDirect #-}
 
 dictDirect :: Parser (A.Array AST.KeyValue)
-dictDirect = Parser $ \v -> case v of
+dictDirect = Parser $ ReaderT $ \v -> case v of
   AST.Dict a -> pure a
-  _ -> errTypeMismatch "Dict" v
+  _          -> errTypeMismatch "Dict" v
 {-# INLINE dictDirect #-}
 
 -- | Decode a Bencode string as a ByteString. Fails on a non-string.
