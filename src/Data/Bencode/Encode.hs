@@ -11,28 +11,34 @@ module Data.Bencode.Encode
     Encoding
   , toBuilder
 
-    -- * Primary encoders
+    -- * String encoders
   , string
-  , integer
-  , list
-  , dict
-
-    -- * More encoders
   , text
+
+    -- * Integer encoders
+  , integer
   , int
-  , word
-  , field
-  , dict'
-  , FieldEncodings
-  , value
   , int64
   , int32
   , int16
   , int8
+  , word
   , word64
   , word32
   , word16
   , word8
+
+    -- * List encoders
+  , list
+
+    -- * Dictionary encoders
+  , dict
+  , field
+  , dict'
+  , FieldEncodings
+
+    -- * Miscellaneous
+  , value
 
     -- * Recipes #recipes#
     -- $recipes
@@ -94,7 +100,8 @@ int = integer_ BB.intDec
 word :: Word -> Encoding
 word = integer_ BB.wordDec
 
--- | A key-value encoding for a Bencode dictionary.
+-- | A key-value encoding for a Bencode dictionary. Convert to an @Encoding@
+-- with 'dict''.
 field :: B.ByteString -> (a -> Encoding) -> a -> FieldEncodings
 field k enc v = FE (Endo ((k, enc v):))
 {-# INLINE field #-}
@@ -107,7 +114,7 @@ dict' :: FieldEncodings -> Encoding
 dict' = dict id . M.fromList . ($ []) . appEndo . unFE
 {-# INLINE dict' #-}
 
--- | Key-value encodings for a Bencode dictionary.
+-- | Key-value encodings for a Bencode dictionary. See 'field' and 'dict''.
 newtype FieldEncodings = FE { unFE :: Endo [(B.ByteString, Encoding)] }
   deriving (Semigroup, Monoid)
 -- FieldEncodings is not just a type alias because there are multiple ways to
@@ -164,14 +171,8 @@ integer_ f = \x -> Encoding $ BB.char7 'i' <> f x <> BB.char7 'e'
 
 -- $quick
 -- Encoding is done using encoders. An encoder is simply a function from a
--- Haskell type to 'Encoding'. There are encoders for the four Bencode types:
---
--- * 'string' encodes 'B.ByteString's as Bencode strings
--- * 'integer' encodes 'Prelude.Integer's as Bencode integers
--- * 'list' encodes 'V.Vector's as Bencode lists
--- * 'dict' encodes 'M.Map's with 'B.ByteString' keys as Bencode dictionaries
---
--- These can used to build more complex encoders for arbitrary types.
+-- Haskell type to 'Encoding'. This module defines encoders that can be
+-- composed to build encoders for arbitrary types.
 --
 -- @
 -- data File = File

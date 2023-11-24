@@ -15,33 +15,39 @@ module Data.Bencode.Decode
   , decode
   , decodeMaybe
 
-    -- * Primary parsers
+    -- * String parsers
   , string
-  , integer
-  , list
-  , dict
-
-    -- * More parsers
   , stringEq
   , text
   , textEq
+
+    -- * Integer parsers
+  , integer
   , int
   , intEq
-  , word
-  , field
-  , field'
-  , dict'
-  , Fields'
-  , value
-  , fail
   , int64
   , int32
   , int16
   , int8
+  , word
   , word64
   , word32
   , word16
   , word8
+
+    -- * List parsers
+  , list
+
+    -- * Dictionary parsers
+  , dict
+  , field
+  , field'
+  , dict'
+  , Fields'
+
+    -- * Miscellaneous
+  , value
+  , fail
 
     -- * Recipes #recipes#
     -- $recipes
@@ -411,14 +417,8 @@ binarySearch k a = go 0 (A.sizeofArray a)
 ------------------------------
 
 -- $quick
--- Decoding is done using parsers. There are parsers for the four Bencode types:
---
--- * 'string' decodes Bencode strings as 'B.ByteString's
--- * 'integer' decodes Bencode integers as 'Prelude.Integer's
--- * 'list' decodes Bencode lists as 'V.Vector's
--- * 'dict' decodes Bencode dictionaries as 'M.Map's with 'B.ByteString' keys.
---
--- These can be used to build more complex parsers for arbitrary types.
+-- Decoding is done using parsers. This module defines parsers that can be
+-- composed to build parsers for arbitrary types.
 --
 -- @
 -- data File = File
