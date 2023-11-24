@@ -132,25 +132,25 @@ errTypeMismatch a b = failResult $ "TypeMismatch " ++ a ++ " " ++ b'
 stringDirect :: Parser B.ByteString
 stringDirect = Parser $ ReaderT $ \v -> case v of
   AST.String s -> pure s
-  _ -> errTypeMismatch "String" v
+  _            -> errTypeMismatch "String" v
 {-# INLINE stringDirect #-}
 
 integerDirect :: Parser B.ByteString
 integerDirect = Parser $ ReaderT $ \v -> case v of
   AST.Integer s -> pure s
-  _ -> errTypeMismatch "Integer" v
+  _             -> errTypeMismatch "Integer" v
 {-# INLINE integerDirect #-}
 
 listDirect :: Parser (A.Array AST.Value)
 listDirect = Parser $ ReaderT $ \v -> case v of
   AST.List a -> pure a
-  _ -> errTypeMismatch "List" v
+  _          -> errTypeMismatch "List" v
 {-# INLINE listDirect #-}
 
 dictDirect :: Parser (A.Array AST.KeyValue)
 dictDirect = Parser $ ReaderT $ \v -> case v of
   AST.Dict a -> pure a
-  _ -> errTypeMismatch "Dict" v
+  _          -> errTypeMismatch "Dict" v
 {-# INLINE dictDirect #-}
 
 -- | Decode a Bencode string as a ByteString. Fails on a non-string.
