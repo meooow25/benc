@@ -186,14 +186,14 @@ parseString s pos k = case BC.span isDigit s of
       Just n ->
         let pos2 = pos + Pos (B.length digs)
         in case BC.uncons s1 of
-            Nothing -> errColon Nothing pos2
-            Just (c3,s3) -> case c3 of
-              ':' -> case B.splitAt n s3 of
-                (str,!s4) | B.length str == n -> k str s4 (pos2 + 1 + Pos n)
-                -- For some reason GHC does not realize without the bang that s4
-                -- does not need to be boxed.
-                _ -> errTooLargeStringLength pos
-              _   -> errColon (Just c3) pos2
+             Nothing -> errColon Nothing pos2
+             Just (c3,s3) -> case c3 of
+               ':' -> case B.splitAt n s3 of
+                 (str,!s4) | B.length str == n -> k str s4 (pos2 + 1 + Pos n)
+                 -- For some reason GHC does not realize without the bang that
+                 -- s4 does not need to be boxed.
+                 _ -> errTooLargeStringLength pos
+               _   -> errColon (Just c3) pos2
 {-# INLINE parseString #-}
 
 ------------------------------

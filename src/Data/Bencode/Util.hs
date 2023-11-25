@@ -14,7 +14,7 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
 import qualified Data.Primitive.Array as A
 
--- | Create an array from a list in reverse order.
+-- | Create an array from a list in reverse order. The list length must be n.
 arrayFromRevListN :: Int -> [a] -> A.Array a
 arrayFromRevListN n xs = A.createArray n errorElement $ \a ->
   let f x k = \i ->
