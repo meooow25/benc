@@ -1,6 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE Strict #-}
+{-# OPTIONS_GHC -fspec-constr #-}
 module Data.Bencode.AST
   ( Value(..)
   , KeyValue(..)
@@ -8,8 +9,14 @@ module Data.Bencode.AST
   ) where
 
 -- ATTENTION: This module is Strict!
+--
 -- Prefer to add definitions where laziness is desirable in another module
 -- instead of here with a ~.
+--
+-- The core of this module has been inspected (with GHC 9.6.3 -O) to make sure
+-- things are optimized and there is no unnecessary boxing to keep time and
+-- allocations to a minimum. When modifying this file make sure to check the
+-- core.
 
 import Data.Char (isDigit)
 import Data.List (intercalate)
@@ -182,13 +189,16 @@ parseString s pos k = case BC.span isDigit s of
             Nothing -> errColon Nothing pos2
             Just (c3,s3) -> case c3 of
               ':' -> case B.splitAt n s3 of
-                (str,s4) | B.length str == n -> k str s4 (pos2 + 1 + Pos n)
+                (str,!s4) | B.length str == n -> k str s4 (pos2 + 1 + Pos n)
+                -- For some reason GHC does not realize without the bang that s4
+                -- does not need to be boxed.
                 _ -> errTooLargeStringLength pos
               _   -> errColon (Just c3) pos2
 {-# INLINE parseString #-}
 
 ------------------------------
 -- Error stuff
+------------------------------
 
 errorAtPos :: String -> Pos -> Either String a
 errorAtPos e (Pos n) = Left $ "ParseErrorAt " ++ show n ++ ": " ++ e
