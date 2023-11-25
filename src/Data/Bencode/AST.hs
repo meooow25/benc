@@ -57,12 +57,10 @@ parseOne :: B.ByteString -> ParseOneResult
 parseOne s = case BC.uncons s of
   Nothing -> errItem Nothing pos
   Just (c,s1) -> case c of
-    _ | isDigit c -> do
-      (str, s2, pos2) <- parseString s pos
-      Right (String str, s2, unPos pos2)
+    _ | isDigit c ->
+      parseString s pos $ \str s2 pos2 -> Right (String str, s2, unPos pos2)
     'i' -> do
-      (i, s2, pos2) <- parseInteger s1 (pos+1)
-      Right (Integer i, s2, unPos pos2)
+      parseInteger s1 (pos+1) $ \i s2 pos2 -> Right (Integer i, s2, unPos pos2)
     'l' -> parseList SNil 0 [] s1 (pos+1)
     'd' -> parseDict SNil s1 (pos+1)
     _   -> errItem (Just c) pos
@@ -75,11 +73,9 @@ parseList stk !n !acc s !pos = case BC.uncons s of
   Nothing -> errItemOrEnd Nothing pos
   Just (c,s1) -> case c of
     _ | isDigit c -> do
-      (str, s2, pos2) <- parseString s pos
-      parseList stk (n+1) (String str : acc) s2 pos2
+      parseString s pos $ \str -> parseList stk (n+1) (String str : acc)
     'i' -> do
-      (i, s2, pos2) <- parseInteger s1 (pos+1)
-      parseList stk (n+1) (Integer i : acc) s2 pos2
+      parseInteger s1 (pos+1) $ \i -> parseList stk (n+1) (Integer i : acc)
     'l' -> parseList (SList n acc stk) 0 [] s1 (pos+1)
     'd' -> parseDict (SList n acc stk) s1 (pos+1)
     'e' -> resumeParse stk (List (arrayFromRevListN n acc)) s1 (pos+1)
@@ -91,19 +87,19 @@ parseDict stk s !pos = case BC.uncons s of
   Nothing -> errStringOrEnd Nothing pos
   Just (c1,s1) -> case c1 of
     _ | isDigit c1 -> do
-      (key, s2, pos2) <- parseString s pos
-      case BC.uncons s2 of
-        Nothing -> errItem Nothing pos2
-        Just (c3,s3) -> case c3 of
-          _ | isDigit c3 -> do
-            (str, s4, pos4) <- parseString s2 pos2
-            parseDict1 key stk 1 [KeyValue key (String str)] s4 pos4
-          'i' -> do
-            (i, s4, pos4) <- parseInteger s3 (pos2+1)
-            parseDict1 key stk 1 [KeyValue key (Integer i)] s4 pos4
-          'l' -> parseList (SDict key 0 [] stk) 0 [] s3 (pos2+1)
-          'd' -> parseDict (SDict key 0 [] stk) s3 (pos2+1)
-          _   -> errItem (Just c3) pos2
+      parseString s pos $ \key s2 pos2 ->
+        case BC.uncons s2 of
+          Nothing -> errItem Nothing pos2
+          Just (c3,s3) -> case c3 of
+            _ | isDigit c3 -> do
+              parseString s2 pos2 $ \str ->
+                parseDict1 key stk 1 [KeyValue key (String str)]
+            'i' -> do
+              parseInteger s3 (pos2+1) $ \i ->
+                parseDict1 key stk 1 [KeyValue key (Integer i)]
+            'l' -> parseList (SDict key 0 [] stk) 0 [] s3 (pos2+1)
+            'd' -> parseDict (SDict key 0 [] stk) s3 (pos2+1)
+            _   -> errItem (Just c3) pos2
     'e' -> resumeParse stk (Dict (arrayFromRevListN 0 [])) s1 (pos+1)
     _   -> errStringOrEnd (Just c1) pos
 
@@ -114,21 +110,21 @@ parseDict1 !pkey stk !n !acc s !pos = case BC.uncons s of
   Nothing -> errStringOrEnd Nothing pos
   Just (c1,s1) -> case c1 of
     _ | isDigit c1 -> do
-      (key, s2, pos2) <- parseString s pos
-      if pkey >= key
-      then errUnsortedKeys pkey key pos
-      else case BC.uncons s2 of
-        Nothing -> errItem Nothing pos2
-        Just (c3,s3) -> case c3 of
-          _ | isDigit c3 -> do
-            (str, s4, pos4) <- parseString s2 pos2
-            parseDict1 key stk (n+1) (KeyValue key (String str) : acc) s4 pos4
-          'i' -> do
-            (i, s4, pos4) <- parseInteger s3 (pos2+1)
-            parseDict1 key stk (n+1) (KeyValue key (Integer i) : acc) s4 pos4
-          'l' -> parseList (SDict key n acc stk) 0 [] s3 (pos2+1)
-          'd' -> parseDict (SDict key n acc stk) s3 (pos2+1)
-          _   -> errItem (Just c3) pos2
+      parseString s pos $ \key s2 pos2 ->
+        if pkey >= key
+        then errUnsortedKeys pkey key pos
+        else case BC.uncons s2 of
+          Nothing -> errItem Nothing pos2
+          Just (c3,s3) -> case c3 of
+            _ | isDigit c3 -> do
+              parseString s2 pos2 $ \str ->
+                parseDict1 key stk (n+1) (KeyValue key (String str) : acc)
+            'i' -> do
+              parseInteger s3 (pos2+1) $ \i ->
+                parseDict1 key stk (n+1) (KeyValue key (Integer i) : acc)
+            'l' -> parseList (SDict key n acc stk) 0 [] s3 (pos2+1)
+            'd' -> parseDict (SDict key n acc stk) s3 (pos2+1)
+            _   -> errItem (Just c3) pos2
     'e' -> resumeParse stk (Dict (arrayFromRevListN n acc)) s1 (pos+1)
     _   -> errStringOrEnd (Just c1) pos
 
@@ -143,8 +139,9 @@ resumeParse stk !x s !pos = case stk of
 
 -- | Parse a Bencode integer. After the \'i\' to the \'e\'.
 parseInteger :: B.ByteString -> Pos
-             -> Either String (B.ByteString, B.ByteString, Pos)
-parseInteger s !pos = case BC.uncons s of
+             -> (B.ByteString -> B.ByteString -> Pos -> ParseOneResult)
+             -> ParseOneResult
+parseInteger s !pos k = case BC.uncons s of
   Nothing -> errDigit Nothing pos
   Just (c1,s1) -> case c1 of
     '0' -> end (B.take 1 s) s1 (pos+1)
@@ -161,15 +158,16 @@ parseInteger s !pos = case BC.uncons s of
     end x s' !pos' = case BC.uncons s' of
       Nothing -> errEnd Nothing pos'
       Just (c,s'') -> case c of
-        'e' -> Right (x, s'', pos'+1)
+        'e' -> k x s'' (pos'+1)
         _   -> errEnd (Just c) pos'
     {-# INLINE end #-}
 {-# INLINE parseInteger #-}
 
 -- | Parse a Bencode string. From the length count to the end of the string.
 parseString :: B.ByteString -> Pos
-            -> Either String (B.ByteString, B.ByteString, Pos)
-parseString s !pos = case BC.span isDigit s of
+            -> (B.ByteString -> B.ByteString -> Pos -> ParseOneResult)
+            -> ParseOneResult
+parseString s !pos k = case BC.span isDigit s of
   (digs,s1) -> case readKnownNaturalAsInt False (BC.dropWhile (=='0') digs) of
     Nothing -> errTooLargeStringLength pos
     Just n ->
@@ -178,7 +176,7 @@ parseString s !pos = case BC.span isDigit s of
           Nothing -> errColon Nothing pos2
           Just (c3,s3) -> case c3 of
             ':' -> case B.splitAt n s3 of
-              (str,s4) | B.length str == n -> Right (str, s4, pos2 + 1 + Pos n)
+              (str,s4) | B.length str == n -> k str s4 (pos2 + 1 + Pos n)
               _ -> errTooLargeStringLength pos
             _   -> errColon (Just c3) pos2
 {-# INLINE parseString #-}
