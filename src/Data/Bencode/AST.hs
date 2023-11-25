@@ -1,10 +1,15 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE Strict #-}
 module Data.Bencode.AST
   ( Value(..)
   , KeyValue(..)
   , parseOnly
   ) where
+
+-- ATTENTION: This module is Strict!
+-- Prefer to add definitions where laziness is desirable in another module
+-- instead of here with a ~.
 
 import Data.Char (isDigit)
 import Data.List (intercalate)
@@ -16,19 +21,19 @@ import qualified Data.Bencode.Util as Util
 
 -- | The Bencode AST.
 data Value
-  = String  {-# UNPACK #-} !B.ByteString
+  = String  {-# UNPACK #-} B.ByteString
   -- ^ Slice of the input @ByteString@.
-  | Integer {-# UNPACK #-} !B.ByteString
+  | Integer {-# UNPACK #-} B.ByteString
   -- ^ Slice of the input @ByteString@, containing a valid integer. Parsing
   -- into an integral type is done later if required.
-  | List    {-# UNPACK #-} !(A.Array Value)
-  | Dict    {-# UNPACK #-} !(A.Array KeyValue)
+  | List    {-# UNPACK #-} (A.Array Value)
+  | Dict    {-# UNPACK #-} (A.Array KeyValue)
   deriving (Eq, Show)
 
 -- | A Bencode dict's key-value pair.
 data KeyValue = KeyValue
-  {-# UNPACK #-} !B.ByteString-- ^ Slice of the input @ByteString@.
-  !Value
+  {-# UNPACK #-} B.ByteString-- ^ Slice of the input @ByteString@.
+  Value
   deriving (Eq, Show)
 
 newtype Pos = Pos { unPos :: Int } deriving (Show, Num)
@@ -39,8 +44,8 @@ type ParseOneResult = Either String (Value, B.ByteString, Int)
 
 data Stack
   = SNil
-  | SList {-# UNPACK #-} !Int ![Value] !Stack
-  | SDict {-# UNPACK #-} !B.ByteString {-# UNPACK #-} !Int ![KeyValue] !Stack
+  | SList {-# UNPACK #-} Int [Value] Stack
+  | SDict {-# UNPACK #-} B.ByteString {-# UNPACK #-} Int [KeyValue] Stack
 
 -- | Parse one Bencode value from the given bytestring. Fails if the string is
 -- not fully consumed.
@@ -69,7 +74,7 @@ parseOne s = case BC.uncons s of
 
 -- | Parse a Bencode list. After the \'l\' marker.
 parseList :: Stack -> Int -> [Value] -> B.ByteString -> Pos -> ParseOneResult
-parseList stk !n !acc s !pos = case BC.uncons s of
+parseList stk n acc s pos = case BC.uncons s of
   Nothing -> errItemOrEnd Nothing pos
   Just (c,s1) -> case c of
     _ | isDigit c -> do
@@ -83,7 +88,7 @@ parseList stk !n !acc s !pos = case BC.uncons s of
 
 -- | Parse a Bencode dict. After the \'d\' marker.
 parseDict :: Stack -> B.ByteString -> Pos -> ParseOneResult
-parseDict stk s !pos = case BC.uncons s of
+parseDict stk s pos = case BC.uncons s of
   Nothing -> errStringOrEnd Nothing pos
   Just (c1,s1) -> case c1 of
     _ | isDigit c1 -> do
@@ -106,7 +111,7 @@ parseDict stk s !pos = case BC.uncons s of
 -- | Parse a Bencode dict. After the first key-value pair.
 parseDict1 :: B.ByteString -> Stack -> Int -> [KeyValue] -> B.ByteString -> Pos
            -> ParseOneResult
-parseDict1 !pkey stk !n !acc s !pos = case BC.uncons s of
+parseDict1 pkey stk n acc s pos = case BC.uncons s of
   Nothing -> errStringOrEnd Nothing pos
   Just (c1,s1) -> case c1 of
     _ | isDigit c1 -> do
@@ -131,7 +136,7 @@ parseDict1 !pkey stk !n !acc s !pos = case BC.uncons s of
 -- | Add the value to the previously incomplete value on the stack, and resume
 -- parsing it.
 resumeParse :: Stack -> Value -> B.ByteString -> Pos -> ParseOneResult
-resumeParse stk !x s !pos = case stk of
+resumeParse stk x s pos = case stk of
   SNil               -> Right (x, s, unPos pos)
   SList n xs stk1    -> parseList stk1 (n+1) (x:xs) s pos
   SDict k n acc stk1 -> parseDict1 k stk1 (n+1) (KeyValue k x : acc) s pos
@@ -141,7 +146,7 @@ resumeParse stk !x s !pos = case stk of
 parseInteger :: B.ByteString -> Pos
              -> (B.ByteString -> B.ByteString -> Pos -> ParseOneResult)
              -> ParseOneResult
-parseInteger s !pos k = case BC.uncons s of
+parseInteger s pos k = case BC.uncons s of
   Nothing -> errDigit Nothing pos
   Just (c1,s1) -> case c1 of
     '0' -> end (B.take 1 s) s1 (pos+1)
@@ -155,7 +160,7 @@ parseInteger s !pos k = case BC.uncons s of
         then errDigitOrNeg (Just c1) pos
         else let n = B.length x in end x s2 (pos + Pos n)
   where
-    end x s' !pos' = case BC.uncons s' of
+    end x s' pos' = case BC.uncons s' of
       Nothing -> errEnd Nothing pos'
       Just (c,s'') -> case c of
         'e' -> k x s'' (pos'+1)
@@ -167,7 +172,7 @@ parseInteger s !pos k = case BC.uncons s of
 parseString :: B.ByteString -> Pos
             -> (B.ByteString -> B.ByteString -> Pos -> ParseOneResult)
             -> ParseOneResult
-parseString s !pos k = case BC.span isDigit s of
+parseString s pos k = case BC.span isDigit s of
   (digs,s1) ->
     case Util.readKnownNaturalAsInt False (BC.dropWhile (=='0') digs) of
       Nothing -> errTooLargeStringLength pos
