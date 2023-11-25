@@ -12,7 +12,7 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.Primitive.Array as A
 
-import Data.Bencode.Util (readKnownNaturalAsInt)
+import qualified Data.Bencode.Util as Util
 
 -- | The Bencode AST.
 data Value
@@ -78,7 +78,7 @@ parseList stk !n !acc s !pos = case BC.uncons s of
       parseInteger s1 (pos+1) $ \i -> parseList stk (n+1) (Integer i : acc)
     'l' -> parseList (SList n acc stk) 0 [] s1 (pos+1)
     'd' -> parseDict (SList n acc stk) s1 (pos+1)
-    'e' -> resumeParse stk (List (arrayFromRevListN n acc)) s1 (pos+1)
+    'e' -> resumeParse stk (List (Util.arrayFromRevListN n acc)) s1 (pos+1)
     _   -> errItemOrEnd (Just c) pos
 
 -- | Parse a Bencode dict. After the \'d\' marker.
@@ -100,7 +100,7 @@ parseDict stk s !pos = case BC.uncons s of
             'l' -> parseList (SDict key 0 [] stk) 0 [] s3 (pos2+1)
             'd' -> parseDict (SDict key 0 [] stk) s3 (pos2+1)
             _   -> errItem (Just c3) pos2
-    'e' -> resumeParse stk (Dict (arrayFromRevListN 0 [])) s1 (pos+1)
+    'e' -> resumeParse stk (Dict (Util.arrayFromRevListN 0 [])) s1 (pos+1)
     _   -> errStringOrEnd (Just c1) pos
 
 -- | Parse a Bencode dict. After the first key-value pair.
@@ -125,7 +125,7 @@ parseDict1 !pkey stk !n !acc s !pos = case BC.uncons s of
             'l' -> parseList (SDict key n acc stk) 0 [] s3 (pos2+1)
             'd' -> parseDict (SDict key n acc stk) s3 (pos2+1)
             _   -> errItem (Just c3) pos2
-    'e' -> resumeParse stk (Dict (arrayFromRevListN n acc)) s1 (pos+1)
+    'e' -> resumeParse stk (Dict (Util.arrayFromRevListN n acc)) s1 (pos+1)
     _   -> errStringOrEnd (Just c1) pos
 
 -- | Add the value to the previously incomplete value on the stack, and resume
@@ -168,17 +168,18 @@ parseString :: B.ByteString -> Pos
             -> (B.ByteString -> B.ByteString -> Pos -> ParseOneResult)
             -> ParseOneResult
 parseString s !pos k = case BC.span isDigit s of
-  (digs,s1) -> case readKnownNaturalAsInt False (BC.dropWhile (=='0') digs) of
-    Nothing -> errTooLargeStringLength pos
-    Just n ->
-      let pos2 = pos + Pos (B.length digs)
-      in case BC.uncons s1 of
-          Nothing -> errColon Nothing pos2
-          Just (c3,s3) -> case c3 of
-            ':' -> case B.splitAt n s3 of
-              (str,s4) | B.length str == n -> k str s4 (pos2 + 1 + Pos n)
-              _ -> errTooLargeStringLength pos
-            _   -> errColon (Just c3) pos2
+  (digs,s1) ->
+    case Util.readKnownNaturalAsInt False (BC.dropWhile (=='0') digs) of
+      Nothing -> errTooLargeStringLength pos
+      Just n ->
+        let pos2 = pos + Pos (B.length digs)
+        in case BC.uncons s1 of
+            Nothing -> errColon Nothing pos2
+            Just (c3,s3) -> case c3 of
+              ':' -> case B.splitAt n s3 of
+                (str,s4) | B.length str == n -> k str s4 (pos2 + 1 + Pos n)
+                _ -> errTooLargeStringLength pos
+              _   -> errColon (Just c3) pos2
 {-# INLINE parseString #-}
 
 ------------------------------
@@ -208,19 +209,3 @@ errUnsortedKeys pkey key = errorAtPos $
 
 errTooLargeStringLength :: Pos -> Either String a
 errTooLargeStringLength = errorAtPos "TooLargeStringLength"
-
-------------------------------
--- Array
-
--- | Create an array from a list in reverse order.
-arrayFromRevListN :: Int -> [a] -> A.Array a
-arrayFromRevListN n xs = A.createArray n errorElement $ \a ->
-  let f x k = \i ->
-        if i == -1
-        then pure ()
-        else A.writeArray a i x *> k (i-1)
-  in foldr f (\ !_ -> pure ()) xs (n-1)
-{-# INLINE arrayFromRevListN #-}
-
-errorElement :: a
-errorElement = error "errorElement"
