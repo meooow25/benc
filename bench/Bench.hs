@@ -34,6 +34,8 @@ main =  defaultMain
     , envPure ldData2 $ bench "list fields" . whnf decListFields
     , envPure liData  $ bench "list word16" . whnf decListWord16
     , envPure ldData2 $ bench "list dict'" . whnf decListDict'
+    , envPure llData2 $ bench "list index" . whnf decListIndex
+    , envPure llData2 $ bench "list list'" . whnf decListList'
     ]
   , bgroup "Encode"
     [ bench "string"      $ whnf encManyString n
@@ -78,6 +80,8 @@ main =  defaultMain
     ldData2 = toBS $ "l" <> stimes n10 d <> "e"
       where
         d = "d1:0de1:1de1:2de1:3de1:4de1:5de1:6de1:7de1:8de1:9dee"
+    silverForMonsters = "lelelelelelelelelele"
+    llData2 = toBS $ "l" <> stimes n10 ("l" <> silverForMonsters <> "e") <> "e"
 
 
 -- All bench functions below are marked NOINLINE to make it easy to find
@@ -158,6 +162,38 @@ decListDict' = runP (D.list foo)
       D.field' "8" (pure ())
       D.field' "9" (pure ())
 {-# NOINLINE decListDict' #-}
+
+decListIndex :: B.ByteString -> V.Vector ()
+decListIndex = runP (D.list foo)
+  where
+    foo = do
+      D.index 0 (pure ())
+      D.index 1 (pure ())
+      D.index 2 (pure ())
+      D.index 3 (pure ())
+      D.index 4 (pure ())
+      D.index 5 (pure ())
+      D.index 6 (pure ())
+      D.index 7 (pure ())
+      D.index 8 (pure ())
+      D.index 9 (pure ())
+{-# NOINLINE decListIndex #-}
+
+decListList' :: B.ByteString -> V.Vector ()
+decListList' = runP (D.list foo)
+  where
+    foo = D.list' $ do
+      D.elem (pure ())
+      D.elem (pure ())
+      D.elem (pure ())
+      D.elem (pure ())
+      D.elem (pure ())
+      D.elem (pure ())
+      D.elem (pure ())
+      D.elem (pure ())
+      D.elem (pure ())
+      D.elem (pure ())
+{-# NOINLINE decListList' #-}
 
 runP :: D.Parser a -> B.ByteString -> a
 runP p = either error id . D.decode p

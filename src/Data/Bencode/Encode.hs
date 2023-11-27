@@ -225,6 +225,7 @@ integer_ f = \x -> Encoding $ BB.char7 'i' <> f x <> BB.char7 'e'
 -- {-# LANGUAGE OverloadedStrings #-}
 -- import Data.ByteString.Builder (toLazyByteString)
 -- import Data.Text (Text)
+-- import qualified Data.Vector as V
 -- import qualified Data.Bencode.Encode as E
 --
 -- toLBS = toLazyByteString . E.toBuilder
@@ -300,4 +301,17 @@ integer_ f = \x -> Encoding $ BB.char7 'i' <> f x <> BB.char7 'e'
 --
 -- >>> toLBS $ encodeFile $ File "hello.txt" 32
 -- "d8:metadatad4:infod4:sizei32eee4:name9:hello.txte"
+--
+-- === Encode as a heterogeneous list
+--
+-- @
+-- data File = File { name :: Text, size :: Int }
+--
+-- encodeFile :: File -> E.'Encoding'
+-- encodeFile (File name size) =\
+--   E.'list' id $ V.fromList [E.'text' name, E.'int' size]
+-- @
+--
+-- >>> toLBS $ encodeFile $ File "hello.txt" 32
+-- "l9:hello.txti32ee"
 --

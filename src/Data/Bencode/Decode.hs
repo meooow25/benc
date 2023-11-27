@@ -37,6 +37,10 @@ module Data.Bencode.Decode
 
     -- * List parsers
   , list
+  , index
+  , elem
+  , list'
+  , Elems
 
     -- * Dictionary parsers
   , dict
@@ -53,7 +57,7 @@ module Data.Bencode.Decode
     -- $recipes
   ) where
 
-import Prelude hiding (fail)
+import Prelude hiding (elem, fail)
 import Control.Applicative
 import Control.Monad hiding (fail)
 import Control.Monad.ST
@@ -316,6 +320,46 @@ newtype Fields' a = Fields'
 -- We could use WriterT (CPS) but StateT is a teeny bit more efficient because
 -- we can do IS.insert x instead of IS.union (IS.singleton x).
 
+-- | Decode a list element with the given parser at the given (0-based) index.
+-- Fails on a non-list, if the index is out of bounds, or if the element parser
+-- fails.
+--
+-- Also see 'elem' and 'list''.
+index :: Int -> Parser a -> Parser a
+index i _ | i < 0 = failParser "IndexOutOfBounds"
+index i p = do
+  a <- listDirect
+  if i < A.sizeofArray a
+  then liftP $ runParser p (A.indexArray a i)
+  else failParser "IndexOutOfBounds"
+{-# INLINE index #-}
+
+-- | Decode the next list element with the given parser.
+elem :: Parser a -> Elems a
+elem p = Elems $ ReaderT $ \a -> do
+  i <- get
+  if i < A.sizeofArray a
+  then lift (runParser p (A.indexArray a i)) <* (put $! i+1)
+  else lift $ failResult "ListElemsExhausted"
+{-# INLINE elem #-}
+
+-- | Create a @Parser@ from an @Elems@. Fails on a non-list, if the number of
+-- elements does not match the @Elems@ exactly, or if any element parser fails.
+list' :: Elems a -> Parser a
+list' es = do
+  a <- listDirect
+  liftP $ do
+    (x, i) <- runStateT (runReaderT (runElems es) a) 0
+    if i == A.sizeofArray a
+    then pure x
+    else failResult $ "ListElemsLeft"
+{-# INLINE list' #-}
+
+-- | List elements parser. See 'elem' and 'list''.
+newtype Elems a = Elems
+  { runElems :: ReaderT (A.Array AST.Value) (StateT Int ParseResult) a
+  } deriving (Functor, Applicative, Alternative, Monad)
+
 -- | Decode a Bencode integer as an @Int64@. Fails on a non-integer or if the
 -- integer is out of bounds for an @Int64@.
 int64 :: Parser Int64
@@ -566,5 +610,20 @@ binarySearch k a = go 0 (A.sizeofArray a)
 -- @
 --
 -- >>> D.decode fileParser "d8:metadatad4:infod4:sizei32eee4:name9:hello.txte"
+-- Right (File {name = "hello.txt", size = 32})
+--
+-- === Decode a heterogeneous list
+--
+-- @
+-- data File = File { name :: Text, size :: Int } deriving Show
+--
+-- fileParser :: D.'Parser' File
+-- fileParser = D.'list'' $
+--   File
+--     \<$> D.'elem' D.'text'
+--     \<*> D.'elem' D.'int'
+-- @
+--
+-- >>> D.decode fileParser "l9:hello.txti32ee"
 -- Right (File {name = "hello.txt", size = 32})
 --
