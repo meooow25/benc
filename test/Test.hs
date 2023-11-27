@@ -151,6 +151,41 @@ decodeTests = testGroup "Decode"
   , testGroupIntegral "word32" True D.word32
   , testGroupIntegral "word16" True D.word16
   , testGroupIntegral "word8" True D.word8
+  , testGroup "index"
+    [ testCase "l3:fooe" $ D.decode (D.index 0 D.string) "l3:fooe" @?= Right "foo"
+    , testCase "l3:fooe -1" $ D.decode (D.index (-1) D.string) "l3:fooe" @?= Left "IndexOutOfBounds"
+    , testCase "l3:fooe 1" $ D.decode (D.index 1 D.string) "l3:fooe" @?= Left "IndexOutOfBounds"
+    , testCase "li2ee" $ D.decode (D.index 0 D.string) "li2ee" @?= Left "TypeMismatch String Integer"
+    , let p =     D.index 5 (Left <$> D.string)
+              <|> D.index 0 (Right <$> D.int)
+              <|> D.index 1 (Left <$> D.string) in
+      testCase "l3:foo3:bare alt" $ D.decode p "l3:foo3:bare" @?= Right (Left "bar")
+    , let p = (,,) <$> D.index 1 D.string
+                   <*> D.index 2 (D.list D.integer)
+                   <*> D.index 0 D.integer in
+      testCase "li1e3:twoli0ei0ei0eee" $ D.decode p "li1e3:twoli0ei0ei0eee" @?= Right ("two", [0,0,0], 1)
+    , testCase "0:" $ D.decode (D.index 0 D.string) "0:" @?= Left "TypeMismatch List String"
+    , testCase "i0e" $ D.decode (D.index 0 D.string) "i0e" @?= Left "TypeMismatch List Integer"
+    , testCase "de" $ D.decode (D.index 0 D.string) "de" @?= Left "TypeMismatch List Dict"
+    ]
+  , testGroup "list'"
+    [ testCase "l3:fooe" $ D.decode (D.list' $ D.elem D.string) "l3:fooe" @?= Right "foo"
+    , testCase "le" $ D.decode (D.list' $ D.elem D.string) "le" @?= Left "ListElemsExhausted"
+    , testCase "l3:foo3:bare" $ D.decode (D.list' $ D.elem D.string) "l3:foo3:bare" @?= Left "ListElemsLeft"
+    , testCase "li2ee" $ D.decode (D.list' $ D.elem D.string) "li2ee" @?= Left "TypeMismatch String Integer"
+    , let p = D.list' $
+                    D.elem D.string
+                <|> D.elem D.integer *> D.elem D.string in
+      testCase "li1e3:fooe alt" $ D.decode p "li1e3:fooe" @?= Right "foo"
+    , let p = D.list' $
+                (,,) <$> D.elem D.integer
+                     <*> D.elem D.string
+                     <*> D.elem (D.list D.integer) in
+      testCase "li1e3:twoli0ei0ei0eee" $ D.decode p "li1e3:twoli0ei0ei0eee" @?= Right (1, "two", [0,0,0])
+    , testCase "0:" $ D.decode (D.list' $ pure ()) "0:" @?= Left "TypeMismatch List String"
+    , testCase "i0e" $ D.decode (D.list' $ pure ()) "i0e" @?= Left "TypeMismatch List Integer"
+    , testCase "de" $ D.decode (D.list' $ pure ()) "de" @?= Left "TypeMismatch List Dict"
+    ]
   , testGroup "field"
     [ testCase "de" $ D.decode (D.field "foo" D.string) "de" @?= Left "KeyNotFound \"foo\""
     , testCase "d3:foo3:bare" $ D.decode (D.field "foo" D.string) "d3:foo3:bare" @?= Right "bar"
