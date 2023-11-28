@@ -47,7 +47,7 @@ module Data.Bencode.Decode
   , field
   , field'
   , dict'
-  , Fields'
+  , Fields
 
     -- * Miscellaneous
   , value
@@ -279,6 +279,16 @@ fail = failParser . ("Fail: " ++ )
 --
 -- If keys should not be left over in the dict, use 'field'' and 'dict''
 -- instead.
+--
+-- ==== __Examples__
+-- @
+-- data File = File { name :: Text, size :: Int }
+--
+-- fileParser :: D.'Parser' File
+-- fileParser =
+--   File \<$> D.field "name" D.'text'
+--        \<*> D.field "size" D.'int'
+-- @
 field :: B.ByteString -> Parser a -> Parser a
 field k p = do
   a <- dictDirect
@@ -289,22 +299,32 @@ field k p = do
 
 -- | Decode a value with the given parser for the given key. Convert to a
 -- @Parser@ with 'dict''.
-field' :: B.ByteString -> Parser a -> Fields' a
-field' k p = Fields' $ ReaderT $ \a -> case binarySearch k a of
+field' :: B.ByteString -> Parser a -> Fields a
+field' k p = Fields $ ReaderT $ \a -> case binarySearch k a of
   (# _ |             #) -> lift . failResult $ "KeyNotFound " ++ show k
   (#   | (# i#, v #) #) -> lift (runParser p v) <* modify' (IS.insert (X.I# i#))
 {-# INLINE field' #-}
 
--- | Create a @Parser@ from a 'Fields''. Fails on a non-dict, if a key is
+-- | Create a @Parser@ from a 'Fields'. Fails on a non-dict, if a key is
 -- absent, or if any value fails to parse. Also fails if there are leftover
 -- unparsed keys in the dict.
 --
 -- If leftover keys should be ignored, use 'field' instead.
-dict' :: Fields' a -> Parser a
+--
+-- ==== __Examples__
+-- @
+-- data File = File { name :: Text, size :: Int }
+--
+-- fileParser :: D.'Parser' File
+-- fileParser = D.dict' $
+--   File \<$> D.'field'' "name" D.'text'
+--        \<*> D.'field'' "size" D.'int'
+-- @
+dict' :: Fields a -> Parser a
 dict' fs = do
   a <- dictDirect
   liftP $ do
-    (v, is) <- runStateT (runReaderT (runFields' fs) a) IS.empty
+    (v, is) <- runStateT (runReaderT (runFields fs) a) IS.empty
     if IS.size is == A.sizeofArray a
     then pure v
     else let i = head $ filter (`IS.notMember` is) [0..]
@@ -313,8 +333,8 @@ dict' fs = do
 {-# INLINE dict' #-}
 
 -- | Key-value parsers. See 'dict'' and 'field''.
-newtype Fields' a = Fields'
-  { runFields' ::
+newtype Fields a = Fields
+  { runFields ::
       ReaderT (A.Array AST.KeyValue) (StateT IS.IntSet ParseResult) a
   } deriving (Functor, Applicative, Alternative, Monad)
 -- We could use WriterT (CPS) but StateT is a teeny bit more efficient because
@@ -325,6 +345,16 @@ newtype Fields' a = Fields'
 -- fails.
 --
 -- Also see 'elem' and 'list''.
+--
+-- ==== __Examples__
+-- @
+-- data File = File { name :: Text, size :: Int }
+--
+-- fileParser :: D.'Parser' File
+-- fileParser =
+--   File \<$> D.index 0 D.'text'
+--        \<*> D.index 1 D.'int'
+-- @
 index :: Int -> Parser a -> Parser a
 index i _ | i < 0 = failParser "IndexOutOfBounds"
 index i p = do
@@ -334,7 +364,8 @@ index i p = do
   else failParser "IndexOutOfBounds"
 {-# INLINE index #-}
 
--- | Decode the next list element with the given parser.
+-- | Decode the next list element with the given parser. Convert to a @Parser@
+-- with 'list''.
 elem :: Parser a -> Elems a
 elem p = Elems $ ReaderT $ \a -> do
   i <- get
@@ -345,6 +376,16 @@ elem p = Elems $ ReaderT $ \a -> do
 
 -- | Create a @Parser@ from an @Elems@. Fails on a non-list, if the number of
 -- elements does not match the @Elems@ exactly, or if any element parser fails.
+--
+-- ==== __Examples__
+-- @
+-- data File = File { name :: Text, size :: Int }
+--
+-- fileParser :: D.'Parser' File
+-- fileParser = D.list'
+--   File \<$> D.'elem' D.'text'
+--        \<*> D.'elem' D.'int'
+-- @
 list' :: Elems a -> Parser a
 list' es = do
   a <- listDirect
@@ -582,14 +623,15 @@ binarySearch k a = go 0 (A.sizeofArray a)
 -- responseParser :: D.'Parser' Response
 -- responseParser = do
 --   id_ <- D.'field' "id" D.'int'
---   success <- D.'field' "status" $
---         False \<$ D.'stringEq' "failure"
---     \<|> True  \<$ D.'stringEq' "success"
---     \<|> D.'fail' "unknown status"
---   Response id_
---     \<$> if success
---         then Right \<$> D.'field' "data" D.'string'
---         else Left  \<$> D.'field' "reason" D.'text'
+--   status <- D.'field' "status" D.'string'
+--   case status of
+--     "failure" -> do
+--       reason <- D.'field' "reason" D.'text'
+--       pure $ Response id_ (Left reason)
+--     "success" -> do
+--       data_ <- D.'field' "data" D.'string'
+--       pure $ Response id_ (Right data_)
+--     _ -> D.'fail' "unknown status"
 -- @
 --
 -- >>> D.decode responseParser "d2:idi42e6:reason12:unauthorized6:status7:failuree"
