@@ -99,5 +99,6 @@ such, it is expected to be slower.</sup>
 
 ## Contributing
 
-Contributions, bug reports, suggestions welcome! Please
-[open an issue](https://github.com/meooow25/benc/issues).
+Questions, bug reports, documentation improvements, code contributions welcome!
+Please [open an issue](https://github.com/meooow25/benc/issues) as the first
+step.
