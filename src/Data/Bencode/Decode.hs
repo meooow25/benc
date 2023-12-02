@@ -52,6 +52,8 @@ module Data.Bencode.Decode
     -- * Miscellaneous
   , value
   , fail
+  , mapMaybe
+  , mapOrFail
 
     -- * Recipes #recipes#
     -- $recipes
@@ -473,6 +475,17 @@ wordL32 = word >>= \i ->
   else failParser "WordOutOfBounds"
 {-# INLINE wordL32 #-}
 
+-- | Run the function on the parsed value, fail with 'empty' if the result is
+-- @Nothing@.
+mapMaybe :: (a -> Maybe b) -> Parser a -> Parser b
+mapMaybe f p = p >>= maybe empty pure . f
+{-# INLINE mapMaybe #-}
+
+-- | Run the function on the parsed value, fail with 'fail' if the result is a
+-- @Left@.
+mapOrFail :: (a -> Either String b) -> Parser a -> Parser b
+mapOrFail f p = p >>= either fail pure . f
+{-# INLINE mapOrFail #-}
 
 -- | Binary search. The array must be sorted by key.
 binarySearch
