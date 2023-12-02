@@ -301,6 +301,8 @@ field k p = do
 
 -- | Decode a value with the given parser for the given key. Convert to a
 -- @Parser@ with 'dict''.
+--
+-- @since 0.1.1.0
 field' :: B.ByteString -> Parser a -> Fields a
 field' k p = Fields $ ReaderT $ \a -> case binarySearch k a of
   (# _ |             #) -> lift . failResult $ "KeyNotFound " ++ show k
@@ -322,6 +324,8 @@ field' k p = Fields $ ReaderT $ \a -> case binarySearch k a of
 --   File \<$> D.'field'' "name" D.'text'
 --        \<*> D.'field'' "size" D.'int'
 -- @
+--
+-- @since 0.1.1.0
 dict' :: Fields a -> Parser a
 dict' fs = do
   a <- dictDirect
@@ -357,6 +361,8 @@ newtype Fields a = Fields
 --   File \<$> D.index 0 D.'text'
 --        \<*> D.index 1 D.'int'
 -- @
+--
+-- @since 0.1.1.0
 index :: Int -> Parser a -> Parser a
 index i _ | i < 0 = failParser "IndexOutOfBounds"
 index i p = do
@@ -368,6 +374,8 @@ index i p = do
 
 -- | Decode the next list element with the given parser. Convert to a @Parser@
 -- with 'list''.
+--
+-- @since 0.1.1.0
 elem :: Parser a -> Elems a
 elem p = Elems $ ReaderT $ \a -> do
   i <- get
@@ -384,10 +392,12 @@ elem p = Elems $ ReaderT $ \a -> do
 -- data File = File { name :: Text, size :: Int }
 --
 -- fileParser :: D.'Parser' File
--- fileParser = D.list'
+-- fileParser = D.list' $
 --   File \<$> D.'elem' D.'text'
 --        \<*> D.'elem' D.'int'
 -- @
+--
+-- @since 0.1.1.0
 list' :: Elems a -> Parser a
 list' es = do
   a <- listDirect
@@ -405,6 +415,8 @@ newtype Elems a = Elems
 
 -- | Decode a Bencode integer as an @Int64@. Fails on a non-integer or if the
 -- integer is out of bounds for an @Int64@.
+--
+-- @since 0.1.1.0
 int64 :: Parser Int64
 int64 = integerDirect >>= maybe (failParser "IntOutOfBounds") pure . go
   where
@@ -415,18 +427,24 @@ int64 = integerDirect >>= maybe (failParser "IntOutOfBounds") pure . go
 
 -- | Decode a Bencode integer as an @Int32@. Fails on a non-integer or if the
 -- integer is out of bounds for an @Int32@.
+--
+-- @since 0.1.1.0
 int32 :: Parser Int32
 int32 = intL32
 {-# INLINE int32 #-}
 
 -- | Decode a Bencode integer as an @Int16@. Fails on a non-integer or if the
 -- integer is out of bounds for an @Int16@.
+--
+-- @since 0.1.1.0
 int16 :: Parser Int16
 int16 = intL32
 {-# INLINE int16 #-}
 
 -- | Decode a Bencode integer as an @Int8@. Fails on a non-integer or if the
 -- integer is out of bounds for an @Int8@.
+--
+-- @since 0.1.1.0
 int8 :: Parser Int8
 int8 = intL32
 {-# INLINE int8 #-}
@@ -441,6 +459,8 @@ intL32 = int >>= \i ->
 
 -- | Decode a Bencode integer as a @Word64@. Fails on a non-integer or if the
 -- integer is out of bounds for a @Word64@.
+--
+-- @since 0.1.1.0
 word64 :: Parser Word64
 word64 = integerDirect >>= maybe (failParser "WordOutOfBounds") pure . go
   where
@@ -451,18 +471,24 @@ word64 = integerDirect >>= maybe (failParser "WordOutOfBounds") pure . go
 
 -- | Decode a Bencode integer as a @Word32@. Fails on a non-integer or if the
 -- integer is out of bounds for a @Word32@.
+--
+-- @since 0.1.1.0
 word32 :: Parser Word32
 word32 = wordL32
 {-# INLINE word32 #-}
 
 -- | Decode a Bencode integer as a @Word16@. Fails on a non-integer or if the
 -- integer is out of bounds for a @Word16@.
+--
+-- @since 0.1.1.0
 word16 :: Parser Word16
 word16 = wordL32
 {-# INLINE word16 #-}
 
 -- | Decode a Bencode integer as a @Word8@. Fails on a non-integer or if the
 -- integer is out of bounds for a @Word8@.
+--
+-- @since 0.1.1.0
 word8 :: Parser Word8
 word8 = wordL32
 {-# INLINE word8 #-}
@@ -477,12 +503,16 @@ wordL32 = word >>= \i ->
 
 -- | Run the function on the parsed value, fail with 'empty' if the result is
 -- @Nothing@.
+--
+-- @since 0.1.1.0
 mapMaybe :: (a -> Maybe b) -> Parser a -> Parser b
 mapMaybe f p = p >>= maybe empty pure . f
 {-# INLINE mapMaybe #-}
 
 -- | Run the function on the parsed value, fail with 'fail' if the result is a
 -- @Left@.
+--
+-- @since 0.1.1.0
 mapOrFail :: (a -> Either String b) -> Parser a -> Parser b
 mapOrFail f p = p >>= either fail pure . f
 {-# INLINE mapOrFail #-}
@@ -626,8 +656,6 @@ binarySearch k a = go 0 (A.sizeofArray a)
 -- === Decode differently based on dict contents
 --
 -- @
--- import Control.Applicative ('(<|>)')
---
 -- data Response = Response
 --   { id_    :: Int
 --   , result :: Either Text ByteString

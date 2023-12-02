@@ -130,34 +130,50 @@ value v = case v of
   Dict vs   -> dict value vs
 
 -- | Encode an @Int64@ as a Bencode integer.
+--
+-- @since 0.1.1.0
 int64 :: Int64 -> Encoding
 int64 = integer_ BB.int64Dec
 
 -- | Encode an @Int32@ as a Bencode integer.
+--
+-- @since 0.1.1.0
 int32 :: Int32 -> Encoding
 int32 = integer_ BB.int32Dec
 
 -- | Encode an @Int16@ as a Bencode integer.
+--
+-- @since 0.1.1.0
 int16 :: Int16 -> Encoding
 int16 = integer_ BB.int16Dec
 
 -- | Encode an @Int8@ as a Bencode integer.
+--
+-- @since 0.1.1.0
 int8 :: Int8 -> Encoding
 int8 = integer_ BB.int8Dec
 
 -- | Encode a @Word64@ as a Bencode integer.
+--
+-- @since 0.1.1.0
 word64 :: Word64 -> Encoding
 word64 = integer_ BB.word64Dec
 
 -- | Encode a @Word32@ as a Bencode integer.
+--
+-- @since 0.1.1.0
 word32 :: Word32 -> Encoding
 word32 = integer_ BB.word32Dec
 
 -- | Encode a @Word16@ as a Bencode integer.
+--
+-- @since 0.1.1.0
 word16 :: Word16 -> Encoding
 word16 = integer_ BB.word16Dec
 
 -- | Encode a @Word8@ as a Bencode integer.
+--
+-- @since 0.1.1.0
 word8 :: Word8 -> Encoding
 word8 = integer_ BB.word8Dec
 
