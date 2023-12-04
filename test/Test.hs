@@ -7,11 +7,13 @@ import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 
 import Control.Applicative
+import Control.Monad
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Builder as BB
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BLC
+import qualified Data.Foldable as F
 import qualified Data.Map as M
 import qualified Data.Vector as V
 
@@ -20,7 +22,7 @@ import qualified Data.Bencode.Encode as E
 import qualified Data.Bencode.Type as Ben
 
 main :: IO ()
-main = defaultMain $ testGroup "Tests"
+main = defaultMain $ localOption (QuickCheckTests 2000) $ testGroup "Tests"
   [ astTests
   , decodeTests
   , encodeTests
@@ -302,15 +304,16 @@ enc :: (a -> E.Encoding) -> a -> BL.ByteString
 enc f = BB.toLazyByteString . E.toBuilder . f
 
 encodeDecodeTests :: TestTree
-encodeDecodeTests = testGroup "EncodeDecode"
-  [ testProperty "decode . encode == Right" $ withMaxSuccess 1000 $
-      \v -> ( D.decode D.value .
-              BL.toStrict .
-              BB.toLazyByteString .
-              E.toBuilder .
-              E.value ) v
-            === Right v
+encodeDecodeTests = testGroup "EncodeDecode, decode . encode == Right"
+  [ testProperty "Value" $
+      \v -> (D.decode D.value . toBS . E.value) v === Right v
+  , testProperty "Val" $
+      \(TV t v) ->
+        (fmap Clean . D.decode (mkParser t) . toBS . encodeVal) v
+        === Right (Clean v)
   ]
+  where
+    toBS = BL.toStrict . BB.toLazyByteString . E.toBuilder
 
 instance Arbitrary Ben.Value where
   arbitrary = sized $ \n -> do
@@ -323,16 +326,12 @@ instance Arbitrary Ben.Value where
         then Ben.String <$> arbitrary
         else Ben.Integer <$> arbitrary
       go n = do
-        ns <- partition n >>= shuffle
+        ns <- partition (n-1)
         lOrD <- arbitrary
         if lOrD
         then Ben.List . V.fromList <$> traverse go ns
         else Ben.Dict . M.fromList
                <$> traverse (\n' -> (,) <$> arbitrary <*> go n') ns
-      partition 0 = pure []
-      partition n = do
-        x <- choose (1,n)
-        (x:) <$> partition (n-x)
 
   shrink (Ben.String s)  = Ben.String <$> shrink s
   shrink (Ben.Integer i) = Ben.Integer <$> shrink i
@@ -342,3 +341,199 @@ instance Arbitrary Ben.Value where
 instance Arbitrary B.ByteString where
   arbitrary = B.pack <$> arbitrary
   shrink = map B.pack . shrink . B.unpack
+
+-- The code below generates some random "type" (Typ) together with a "value"
+-- (Val) of that type.
+-- The Typ describes how to generate a value and how to parse a value.
+-- A Val can have some junk which will be encoded but not decoded, to test that
+-- parsers which are supposed to ignore data do so (field and index).
+
+data Val
+  = String !B.ByteString
+  | Integer !Integer
+  | List !(V.Vector Val)
+  | Dict !(M.Map B.ByteString Val)
+  | Int !Int
+  | Word !Word
+  | Fields
+      !(M.Map B.ByteString Val) -- ^ contents
+      !(M.Map B.ByteString Val) -- ^ junk
+  | Fields' !(M.Map B.ByteString Val)
+  | Index
+      !(V.Vector Val) -- ^ contents and junk together
+      !(V.Vector Int) -- ^ indices of the contents
+  | Elems !(V.Vector Val)
+  deriving Show
+
+data Sized a = Sized !Int !a deriving Show
+
+data Typ
+  = TString
+  | TInteger
+  | TList !(Sized Typ)
+  | TDict !(Sized Typ)
+  | TInt
+  | TWord
+  | TFields !(M.Map B.ByteString (Sized Typ)) !(M.Map B.ByteString (Sized Typ))
+  | TFields' !(M.Map B.ByteString (Sized Typ))
+  | TIndex !(V.Vector (Sized Typ)) !(V.Vector Int)
+  | TElems !(V.Vector (Sized Typ))
+  deriving Show
+
+-- Newtype to compare the non-junk parts of a Val via Eq.
+newtype Clean = Clean Val deriving Show
+
+instance Eq Clean where
+  Clean x1 == Clean x2 = case (x1,x2) of
+    (String s1   , String s2   ) -> s1 == s2
+    (Integer i1  , Integer i2  ) -> i1 == i2
+    (List l1     , List l2     ) -> fmap Clean l1 == fmap Clean l2
+    (Dict d1     , Dict d2     ) -> fmap Clean d1 == fmap Clean d2
+    (Int i1      , Int i2      ) -> i1 == i2
+    (Word w1     , Word w2     ) -> w1 == w2
+    (Fields m1 _ , Fields m2 _ ) -> fmap Clean m1 == fmap Clean m2
+    (Fields' m1  , Fields' m2  ) -> fmap Clean m1 == fmap Clean m2
+    (Index l1 is1, Index l2 is2) -> fmap Clean (V.backpermute l1 is1) ==
+                                    fmap Clean (V.backpermute l2 is2)
+    (Elems l1    , Elems l2    ) -> fmap Clean l1 == fmap Clean l2
+    _                            -> False
+
+encodeVal :: Val -> E.Encoding
+encodeVal x = case x of
+  String s     -> E.string s
+  Integer i    -> E.integer i
+  List l       -> E.list encodeVal l
+  Dict d       -> E.dict encodeVal d
+  Int i        -> E.int i
+  Word w       -> E.word w
+  Fields m1 m2 -> E.dict' $
+                    M.foldMapWithKey (\k -> E.field k encodeVal) (m1 <> m2)
+  Fields' m    -> E.dict' $ M.foldMapWithKey (\k -> E.field k encodeVal) m
+  Index l _    -> E.list encodeVal l
+  Elems l      -> E.list encodeVal l
+
+mkParser :: Sized Typ -> D.Parser Val
+mkParser (Sized _ t) = case t of
+  TString  -> String <$> D.string
+  TInteger -> Integer <$> D.integer
+  TList t' -> List <$> D.list (mkParser t')
+  TDict t' -> Dict <$> D.dict (mkParser t')
+  TInt     -> Int <$> D.int
+  TWord    -> Word <$> D.word
+  TFields m1 _ ->
+    Fields <$> M.traverseWithKey (\k -> D.field k . mkParser) m1
+           <*> pure M.empty
+  TFields' m ->
+    Fields' <$> D.dict' (M.traverseWithKey (\k -> D.field' k . mkParser) m)
+  TIndex l is ->
+    Index <$> traverse (\i -> D.index i (mkParser (l V.! i))) is
+          <*> pure (V.generate (V.length is) id)
+  TElems l -> Elems <$> D.list' (traverse (D.elem . mkParser) l)
+
+data TV = TV !(Sized Typ) !Val deriving Show
+
+instance Arbitrary TV where
+  arbitrary = sized $ \n -> do
+    n' <- choose (0,n)
+    go (n'+1)
+    where
+      go n = do
+        t <- genTyp n
+        v <- genVal n t
+        pure $ TV t v
+
+-- | Generate a Typ and its minimum number of nodes, such that it is <= n.
+genTyp :: Int -> Gen (Sized Typ)
+genTyp n | n <= 0 = error "genTyp n | n <= 0"
+genTyp 1 = Sized 1 <$> elements [TString, TInteger, TInt, TWord]
+genTyp n = oneof
+  [ Sized 1 . TList <$> genTypMany (n-1)
+  , Sized 1 . TDict <$> genTypMany (n-1)
+  , do
+      n' <- choose (0, n-1)
+      Sized n1 m1 <- goMap n'
+      Sized n2 m2 <- goMap (n-1-n')
+      pure $ Sized (n1+n2+1) (TFields m1 m2)
+  , do
+      Sized n1 m1 <- goMap (n-1)
+      pure $ Sized (n1+1) (TFields' m1)
+  , do
+      Sized n1 v1 <- goVec (n-1)
+      is <- V.fromList <$> sublistOf [0 .. V.length v1 - 1]
+      pure $ Sized (n1+1) (TIndex v1 is)
+  , do
+      Sized n1 v1 <- goVec (n-1)
+      pure $ Sized (n1+1) (TElems v1)
+  ]
+  where
+    genTypMany m = partition m >>= genTyp . minimum
+    goMap m = do
+      ms <- partition m
+      kvs <- traverse (\m' -> (,) <$> arbitrary <*> genTyp m') ms
+      pure $ sizedF (M.fromList kvs)
+    goVec m = do
+      ms <- partition m
+      sizedF . V.fromList <$> traverse genTyp ms
+    sizedF xs = Sized (sizeF xs) xs
+
+-- | Generate a value with at most n nodes
+genVal :: Int -> Sized Typ -> Gen Val
+genVal n (Sized n' _) | n < n' = error "genVal: n < size of type"
+genVal n (Sized _ t) = case t of
+  TString -> String <$> arbitrary
+  TInteger -> Integer <$> arbitrary
+  TList t' -> List . V.fromList <$> goMany (n-1) t'
+  TDict t' -> do
+    vs <- goMany (n-1) t'
+    ks <- replicateM (length vs) arbitrary
+    pure $ Dict $ M.fromList $ zip ks vs
+  TInt -> Int <$> arbitrary
+  TWord -> Word <$> arbitrary
+  TFields mp1 mp2 -> do
+    ~[m1,m2] <- partitionWithMin (n-1) [sizeF mp1, sizeF mp2]
+    Fields <$> goMap m1 mp1 <*> goMap m2 mp2
+  TFields' mp -> Fields' <$> goMap (n-1) mp
+  TIndex l is -> flip Index is . V.fromList <$> goVec (n-1) (F.toList l)
+  TElems l -> Elems . V.fromList <$> goVec (n-1) (F.toList l)
+  where
+    goMany m t'@(Sized n' _) = do
+      ns <- partitionWithMin m (replicate (div m n') n')
+      traverse (flip genVal t') ns
+    goMap m mp = do
+      ns <- partitionWithMin m (sizes (M.elems mp))
+      M.fromList . zip (M.keys mp) <$> zipWithM genVal ns (M.elems mp)
+    goVec m l = do
+      ns <- partitionWithMin m (sizes l)
+      zipWithM genVal ns l
+
+sizeF :: Foldable f => f (Sized a) -> Int
+sizeF = F.foldl' (\acc (Sized n _) -> acc + n) 0
+
+sizes :: Functor f => f (Sized a) -> f Int
+sizes = fmap (\(Sized n _) -> n)
+
+-- | Partition m into pieces with a given minimum value of each piece.
+partitionWithMin :: Int -> [Int] -> Gen [Int]
+partitionWithMin m xs | m < sum xs = error "partitionWithMin: n not big enough"
+partitionWithMin m xs = zipWith (+) xs <$> partitionN (length xs) (m - sum xs)
+
+-- | Partition m into n pieces. Pieces can be 0.
+partitionN :: Int -> Int -> Gen [Int]
+partitionN n0 _ | n0 <= 0 = error "partitionN: n <= 0"
+partitionN n0 m0 = go n0 m0 >>= shuffle
+  where
+    go 1 m = pure [m]
+    go n 0 = (0:) <$> go (n-1) 0
+    go n m = do
+      x <- choose (1,m)
+      (x:) <$> go (n-1) (m-x)
+
+-- | Partition into pieces >= 0
+partition :: Int -> Gen [Int]
+partition m0 | m0 < 0 = error "partition: m < 0"
+partition m0 = go m0 >>= shuffle
+  where
+    go 0 = pure []
+    go m = do
+      x <- choose (1,m)
+      (x:) <$> go (m-x)
