@@ -19,9 +19,10 @@ tested-with:
   , GHC == 9.0.2
   , GHC == 9.2.8
   , GHC == 9.4.8
-  , GHC == 9.6.5
-  , GHC == 9.8.2
+  , GHC == 9.6.6
+  , GHC == 9.8.4
   , GHC == 9.10.1
+  , GHC == 9.12.1
 
 source-repository head
     type:     git
@@ -45,7 +46,7 @@ library
     build-depends:
         base         >= 4.14    && < 5.0
       , bytestring   >= 0.10.10 && < 0.13
-      , containers   >= 0.6.2.1 && < 0.8
+      , containers   >= 0.6.2.1 && < 0.9
       , primitive    >= 0.9.0   && < 0.10
       , text         >= 1.2.3.2 && < 2.2
       , transformers >= 0.5.6.2 && < 0.7
